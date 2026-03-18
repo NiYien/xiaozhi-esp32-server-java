@@ -1,6 +1,12 @@
 # Use Eclipse Temurin for both build and runtime stages
 FROM eclipse-temurin:21-jdk AS builder
 
+# 代理设置（通过宿主机代理加速下载）
+ENV http_proxy=http://192.168.2.4:7897
+ENV https_proxy=http://192.168.2.4:7897
+ENV HTTP_PROXY=http://192.168.2.4:7897
+ENV HTTPS_PROXY=http://192.168.2.4:7897
+
 # 构建参数
 # Vosk模型大小: small(~50MB) 或 standard(~1.3GB)
 ARG VOSK_MODEL_SIZE=small
@@ -13,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     unzip \
     curl \
+    bzip2 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -20,6 +27,7 @@ WORKDIR /build
 # 复制源代码并构建
 COPY ./src ./src
 COPY ./db ./db
+COPY ./lib ./lib
 COPY pom.xml ./
 RUN mvn -Dmaven.repo.local=/root/.m2/repository package -DskipTests
 
@@ -41,17 +49,23 @@ COPY ./models/ /build/models/
 # 复制整个 lib 目录（包含可能预下载的 JNI 库）
 COPY ./lib/ /build/lib/
 
-# Vosk STT 模型：本地有则跳过下载
-RUN if [ -d "/build/models/vosk-model" ] && [ "$(ls -A /build/models/vosk-model 2>/dev/null)" ]; then \
-        echo ">>> 使用本地预下载的 Vosk 模型"; \
+# Vosk STT 模型：优先使用已解压目录，其次本地 zip，最后在线下载
+RUN if [ "$VOSK_MODEL_SIZE" = "small" ]; then \
+        VOSK_NAME="vosk-model-small-cn-0.22"; \
+    else \
+        VOSK_NAME="vosk-model-cn-0.22"; \
+    fi; \
+    if [ -d "/build/models/vosk-model" ] && [ "$(ls -A /build/models/vosk-model 2>/dev/null)" ]; then \
+        echo ">>> 使用本地预下载的 Vosk 模型（已解压目录）"; \
+    elif [ -f "/build/models/${VOSK_NAME}.zip" ]; then \
+        echo ">>> 发现本地 zip 文件，解压 ${VOSK_NAME}.zip ..."; \
+        cd /build/models && \
+        unzip -q ${VOSK_NAME}.zip && \
+        mv ${VOSK_NAME} vosk-model && \
+        rm -f ${VOSK_NAME}.zip; \
     else \
         echo ">>> 本地无 Vosk 模型，开始在线下载..."; \
         mkdir -p /vosk_cache; \
-        if [ "$VOSK_MODEL_SIZE" = "small" ]; then \
-            VOSK_NAME="vosk-model-small-cn-0.22"; \
-        else \
-            VOSK_NAME="vosk-model-cn-0.22"; \
-        fi; \
         if [ ! -d "/vosk_cache/${VOSK_NAME}" ]; then \
             echo "下载 ${VOSK_NAME} ..."; \
             cd /vosk_cache && \
@@ -107,6 +121,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxtst6 \
     libxrender1 \
     && rm -rf /var/lib/apt/lists/*
+
+# 清除代理设置（运行时不需要代理）
+ENV http_proxy=""
+ENV https_proxy=""
+ENV HTTP_PROXY=""
+ENV HTTPS_PROXY=""
 
 WORKDIR /app
 

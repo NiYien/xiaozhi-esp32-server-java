@@ -41,6 +41,9 @@ public class CmsUtils {
     @Value("${xiaozhi.server.domain:}")
     private String domain;
 
+    @Value("${xiaozhi.server.ip:}")
+    private String configuredIp;
+
     // 初始化websocketAddress、otaAddress
     @PostConstruct
     private void initializeAddresses() {
@@ -49,7 +52,7 @@ public class CmsUtils {
             otaAddress = "https://" + domain + "/api/device/ota";
             serverAddress = "https://" + domain;
         } else {
-            String serverIp = getServerIp();
+            String serverIp = (configuredIp != null && !configuredIp.isEmpty()) ? configuredIp : getServerIp();
             websocketAddress = "ws://" + serverIp + ":" + port + WebSocketConfig.WS_PATH; // 默认WebSocket端口
             otaAddress = "http://" + serverIp + ":" + port + "/api/device/ota";
             serverAddress = "http://" + serverIp + ":" + port;
