@@ -7,16 +7,15 @@ import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.common.web.PageFilter;
 import com.xiaozhi.dto.param.*;
 import com.xiaozhi.dto.response.*;
-import com.xiaozhi.entity.SysAuthRole;
-import com.xiaozhi.entity.SysPermission;
 import com.xiaozhi.entity.SysUser;
 import com.xiaozhi.entity.SysUserAuth;
 import com.xiaozhi.security.AuthenticationService;
-import com.xiaozhi.service.SysPermissionService;
 import com.xiaozhi.service.SysUserService;
 import com.xiaozhi.service.SysUserAuthService;
 import com.xiaozhi.service.WxLoginService;
-import com.xiaozhi.service.SysAuthRoleService;
+import com.xiaozhi.service.auth.LoginResponseBuilder;
+import com.xiaozhi.service.auth.CaptchaValidator;
+import com.xiaozhi.service.auth.UserExistenceChecker;
 import com.xiaozhi.utils.DtoConverter;
 import cn.dev33.satoken.annotation.SaIgnore;
 import cn.dev33.satoken.stp.StpUtil;
@@ -34,15 +33,14 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * 用户信息
- * 
+ *
  * @author: Joey
- * 
+ *
  */
 @RestController
 @RequestMapping("/api/user")
@@ -62,10 +60,13 @@ public class UserController extends BaseController {
     private SysUserAuthService userAuthService;
 
     @Resource
-    private SysAuthRoleService authRoleService;
+    private LoginResponseBuilder loginResponseBuilder;
 
     @Resource
-    private SysPermissionService permissionService;
+    private CaptchaValidator captchaValidator;
+
+    @Resource
+    private UserExistenceChecker userExistenceChecker;
 
     @Resource
     private SmsUtils smsUtils;
@@ -91,21 +92,10 @@ public class UserController extends BaseController {
                 return ResultMessage.error(401, "用户不存在");
             }
 
-            // 获取角色和权限
-            SysAuthRole role = authRoleService.selectById(user.getRoleId());
-            List<SysPermission> permissions = permissionService.selectByUserId(user.getUserId());
-            List<SysPermission> permissionTree = permissionService.buildPermissionTree(permissions);
-
             // 返回用户信息
-            LoginResponseDTO response = LoginResponseDTO.builder()
-                .token(StpUtil.getTokenValue())
-                .refreshToken(StpUtil.getTokenValue())
-                .expiresIn((int) (StpUtil.getTokenTimeout()))
-                .userId(user.getUserId())
-                .user(DtoConverter.toUserDTO(user))
-                .role(DtoConverter.toRoleDTO(role))
-                .permissions(DtoConverter.toPermissionDTOList(permissionTree))
-                .build();
+            LoginResponseDTO response = loginResponseBuilder.buildResponse(user, StpUtil.getTokenValue());
+            // check-token使用实际的token超时时间
+            response.setExpiresIn((int) (StpUtil.getTokenTimeout()));
 
             return ResultMessage.success(response);
         } catch (Exception e) {
@@ -131,24 +121,11 @@ public class UserController extends BaseController {
 
             // 重新登录，生成新Token
             StpUtil.logout();
-            StpUtil.login(userId, 2592000);
+            StpUtil.login(userId, LoginResponseBuilder.TOKEN_EXPIRE_SECONDS);
             String newToken = StpUtil.getTokenValue();
 
-            // 获取角色和权限
-            SysAuthRole role = authRoleService.selectById(user.getRoleId());
-            List<SysPermission> permissions = permissionService.selectByUserId(user.getUserId());
-            List<SysPermission> permissionTree = permissionService.buildPermissionTree(permissions);
-
             // 返回新Token和用户信息
-            LoginResponseDTO response = LoginResponseDTO.builder()
-                .token(newToken)
-                .refreshToken(newToken)
-                .expiresIn(2592000)
-                .userId(user.getUserId())
-                .user(DtoConverter.toUserDTO(user))
-                .role(DtoConverter.toRoleDTO(role))
-                .permissions(DtoConverter.toPermissionDTOList(permissionTree))
-                .build();
+            LoginResponseDTO response = loginResponseBuilder.buildResponse(user, newToken);
 
             return ResultMessage.success(response);
         } catch (Exception e) {
@@ -174,24 +151,11 @@ public class UserController extends BaseController {
             userService.update(user);
 
             // Sa-Token登录
-            StpUtil.login(user.getUserId(), 2592000);
+            StpUtil.login(user.getUserId(), LoginResponseBuilder.TOKEN_EXPIRE_SECONDS);
             String token = StpUtil.getTokenValue();
 
-            // 获取角色和权限
-            SysAuthRole role = authRoleService.selectById(user.getRoleId());
-            List<SysPermission> permissions = permissionService.selectByUserId(user.getUserId());
-            List<SysPermission> permissionTree = permissionService.buildPermissionTree(permissions);
-
-            // 转换为DTO
-            LoginResponseDTO response = LoginResponseDTO.builder()
-                .token(token)
-                .refreshToken(token)
-                .expiresIn(2592000)
-                .userId(user.getUserId())
-                .user(DtoConverter.toUserDTO(user))
-                .role(DtoConverter.toRoleDTO(role))
-                .permissions(DtoConverter.toPermissionDTOList(permissionTree))
-                .build();
+            // 构建登录响应
+            LoginResponseDTO response = loginResponseBuilder.buildResponse(user, token);
 
             return ResultMessage.success(response);
         } catch (UsernameNotFoundException e) {
@@ -213,13 +177,7 @@ public class UserController extends BaseController {
     public ResultMessage telLogin(@Valid @RequestBody TelLoginParam param, HttpServletRequest request) {
         try {
             // 验证验证码
-            SysUser codeUser = new SysUser();
-            codeUser.setEmail(param.getTel());
-            codeUser.setCode(param.getCode());
-            int row = userService.queryCaptcha(codeUser);
-            if (row < 1) {
-                return ResultMessage.error("验证码错误或已过期");
-            }
+            captchaValidator.validate(param.getCode(), param.getTel());
 
             // 查询用户，不存在则自动注册
             SysUser user = userService.selectUserByTel(param.getTel());
@@ -233,26 +191,15 @@ public class UserController extends BaseController {
             userService.update(user);
 
             // Sa-Token登录
-            StpUtil.login(user.getUserId(), 2592000);
+            StpUtil.login(user.getUserId(), LoginResponseBuilder.TOKEN_EXPIRE_SECONDS);
             String token = StpUtil.getTokenValue();
 
-            // 获取角色和权限
-            SysAuthRole role = authRoleService.selectById(user.getRoleId());
-            List<SysPermission> permissions = permissionService.selectByUserId(user.getUserId());
-            List<SysPermission> permissionTree = permissionService.buildPermissionTree(permissions);
-
-            // 转换为DTO
-            LoginResponseDTO response = LoginResponseDTO.builder()
-                .token(token)
-                .refreshToken(token)
-                .expiresIn(2592000)
-                .userId(user.getUserId())
-                .user(DtoConverter.toUserDTO(user))
-                .role(DtoConverter.toRoleDTO(role))
-                .permissions(DtoConverter.toPermissionDTOList(permissionTree))
-                .build();
+            // 构建登录响应
+            LoginResponseDTO response = loginResponseBuilder.buildResponse(user, token);
 
             return ResultMessage.success(response);
+        } catch (CaptchaValidator.CaptchaInvalidException e) {
+            return ResultMessage.error(e.getMessage());
         } catch (Exception e) {
             logger.error("手机号登录失败", e);
             return ResultMessage.error("登录失败，请稍后重试");
@@ -312,12 +259,10 @@ public class UserController extends BaseController {
             // 2. 查询或创建用户
             SysUserAuth userAuth = userAuthService.getByOpenIdAndPlatform(openid, "wechat");
             SysUser user;
-            boolean isNewUser = false;
 
             if (userAuth == null) {
                 // 新用户 - 自动注册
                 user = autoRegisterWechatUser(openid, unionId, sessionKey, wxLoginInfo, inviterId);
-                isNewUser = true;
 
                 // 创建认证记录
                 userAuth = new SysUserAuth();
@@ -338,28 +283,15 @@ public class UserController extends BaseController {
             userService.update(user);
 
             // 3. Sa-Token登录
-            StpUtil.login(user.getUserId(), 2592000);  // 30天过期
+            StpUtil.login(user.getUserId(), LoginResponseBuilder.TOKEN_EXPIRE_SECONDS);
 
             // 4. 获取Token
             String token = StpUtil.getTokenValue();
 
-            // 5. 获取用户角色和权限
-            SysAuthRole role = authRoleService.selectById(user.getRoleId());
-            List<SysPermission> permissions = permissionService.selectByUserId(user.getUserId());
-            List<SysPermission> permissionTree = permissionService.buildPermissionTree(permissions);
+            // 5. 构建登录响应（修复：使用LoginResponseDTO替代HashMap）
+            LoginResponseDTO response = loginResponseBuilder.buildResponse(user, token);
 
-            // 6. 返回结果
-            Map<String, Object> result = new HashMap<>();
-            result.put("token", token);
-            result.put("refreshToken", token);
-            result.put("expiresIn", 2592000);
-            result.put("userId", user.getUserId());
-            result.put("isNewUser", isNewUser);
-            result.put("user", user);
-            result.put("role", role);
-            result.put("permissions", permissionTree);
-
-            return ResultMessage.success(result);
+            return ResultMessage.success(response);
         } catch (Exception e) {
             logger.error("微信登录失败: {}", e.getMessage(), e);
             return ResultMessage.error("微信登录失败: " + e.getMessage());
@@ -409,38 +341,11 @@ public class UserController extends BaseController {
     public ResultMessage create(@Valid @RequestBody RegisterParam param) {
         try {
             // 验证验证码
-            SysUser codeUser = new SysUser();
-            codeUser.setEmail(param.getEmail() != null ? param.getEmail() : param.getTel());
-            codeUser.setTel(param.getTel());
-            codeUser.setCode(param.getCode());
-            int row = userService.queryCaptcha(codeUser);
-            if (row < 1) {
-                return ResultMessage.error("无效验证码");
-            }
+            String emailOrTel = param.getEmail() != null ? param.getEmail() : param.getTel();
+            captchaValidator.validate(param.getCode(), emailOrTel);
 
-            // 检查用户名是否已存在（防止并发注册导致重复）
-            if (StringUtils.hasText(param.getUsername())) {
-                SysUser existingUser = userService.selectUserByUsername(param.getUsername());
-                if (!ObjectUtils.isEmpty(existingUser)) {
-                    return ResultMessage.error("用户名已存在");
-                }
-            }
-
-            // 检查邮箱是否已存在
-            if (StringUtils.hasText(param.getEmail())) {
-                SysUser existingUser = userService.selectUserByEmail(param.getEmail());
-                if (!ObjectUtils.isEmpty(existingUser)) {
-                    return ResultMessage.error("邮箱已注册");
-                }
-            }
-
-            // 检查手机号是否已存在
-            if (StringUtils.hasText(param.getTel())) {
-                SysUser existingUser = userService.selectUserByTel(param.getTel());
-                if (!ObjectUtils.isEmpty(existingUser)) {
-                    return ResultMessage.error("手机号已注册");
-                }
-            }
+            // 检查用户名、邮箱、手机号是否已存在
+            userExistenceChecker.ensureNotExists(param.getEmail(), param.getTel(), param.getUsername(), null);
 
             // 创建用户
             SysUser user = new SysUser();
@@ -454,6 +359,10 @@ public class UserController extends BaseController {
                 return ResultMessage.success(DtoConverter.toUserDTO(user));
             }
             return ResultMessage.error("注册失败");
+        } catch (CaptchaValidator.CaptchaInvalidException e) {
+            return ResultMessage.error(e.getMessage());
+        } catch (UserExistenceChecker.UserExistsException e) {
+            return ResultMessage.error(e.getMessage());
         } catch (Exception e) {
             logger.error("注册失败", e);
             return ResultMessage.error("注册失败");
@@ -494,25 +403,16 @@ public class UserController extends BaseController {
                 return ResultMessage.error("无此用户，更新失败");
             }
 
-            // 检查邮箱
+            // 检查邮箱和手机号是否已被其他用户占用
+            userExistenceChecker.ensureNotExists(param.getEmail(), param.getTel(), user.getUserId());
+
+            // 更新字段
             if (StringUtils.hasText(param.getEmail())) {
-                SysUser existingUser = userService.selectUserByEmail(param.getEmail());
-                if (!ObjectUtils.isEmpty(existingUser) && !existingUser.getUserId().equals(user.getUserId())) {
-                    return ResultMessage.error("邮箱已被其他用户绑定，更新失败");
-                }
                 user.setEmail(param.getEmail());
             }
-
-            // 检查手机号
             if (StringUtils.hasText(param.getTel())) {
-                SysUser existingUser = userService.selectUserByTel(param.getTel());
-                if (!ObjectUtils.isEmpty(existingUser) && !existingUser.getUserId().equals(user.getUserId())) {
-                    return ResultMessage.error("手机号已被其他用户绑定，更新失败");
-                }
                 user.setTel(param.getTel());
             }
-
-            // 更新其他字段
             if (StringUtils.hasText(param.getPassword())) {
                 user.setPassword(authenticationService.encryptPassword(param.getPassword()));
             }
@@ -528,6 +428,8 @@ public class UserController extends BaseController {
                 return ResultMessage.success(DtoConverter.toUserDTO(updatedUser));
             }
             return ResultMessage.error("更新失败");
+        } catch (UserExistenceChecker.UserExistsException e) {
+            return ResultMessage.error(e.getMessage());
         } catch (Exception e) {
             logger.error("更新用户信息失败", e);
             return ResultMessage.error("更新失败");
@@ -546,13 +448,7 @@ public class UserController extends BaseController {
     public ResultMessage resetPassword(@Valid @RequestBody ResetPasswordParam param) {
         try {
             // 1. 验证验证码
-            SysUser codeUser = new SysUser();
-            codeUser.setEmail(param.getEmail());
-            codeUser.setCode(param.getCode());
-            int row = userService.queryCaptcha(codeUser);
-            if (row < 1) {
-                return ResultMessage.error("验证码错误或已过期");
-            }
+            captchaValidator.validate(param.getCode(), param.getEmail());
 
             // 2. 根据邮箱查找用户
             SysUser user = userService.selectUserByEmail(param.getEmail());
@@ -566,6 +462,8 @@ public class UserController extends BaseController {
                 return ResultMessage.success("密码重置成功");
             }
             return ResultMessage.error("密码重置失败");
+        } catch (CaptchaValidator.CaptchaInvalidException e) {
+            return ResultMessage.error(e.getMessage());
         } catch (Exception e) {
             logger.error("重置密码失败", e);
             return ResultMessage.error("密码重置失败");
@@ -602,7 +500,7 @@ public class UserController extends BaseController {
             return ResultMessage.error("发送失败，请稍后重试");
         }
     }
-    
+
     /**
      * 短信验证码发送
      */
@@ -679,22 +577,10 @@ public class UserController extends BaseController {
     @Operation(summary = "检查用户名和手机号是否已存在", description = "返回检查结果")
     public ResultMessage checkUser(SysUser user) {
         try {
-            String userName = user.getUsername();
-            String userTel = user.getTel();
-            String userEmail = user.getEmail();
-            user = userService.selectUserByTel(userTel);
-            if (!ObjectUtils.isEmpty(user)) {
-                return ResultMessage.error("手机已注册");
-            }
-            user = userService.selectUserByEmail(userEmail);
-            if (!ObjectUtils.isEmpty(user)) {
-                return ResultMessage.error("邮箱已注册");
-            }
-            user = userService.selectUserByUsername(userName);
-            if (!ObjectUtils.isEmpty(user)) {
-                return ResultMessage.error("用户名已存在");
-            }
+            userExistenceChecker.ensureNotExists(user.getEmail(), user.getTel(), user.getUsername(), null);
             return ResultMessage.success();
+        } catch (UserExistenceChecker.UserExistsException e) {
+            return ResultMessage.error(e.getMessage());
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             return ResultMessage.error("操作失败,请联系管理员");

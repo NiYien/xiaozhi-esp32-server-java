@@ -107,174 +107,37 @@ public class SysAgentServiceImpl implements SysAgentService {
 
     /**
      * 从DIFY API获取智能体信息，并与数据库同步
-     * 
+     *
      * @param agent 智能体信息
      * @return 智能体集合
      */
     private List<SysAgent> getDifyAgents(SysAgent agent) {
-        List<SysAgent> agentList = new ArrayList<>();
-        
-        // 查询所有类型的Dify配置
-        SysConfig queryConfig = new SysConfig();
-        queryConfig.setProvider("dify");
-        List<SysConfig> allConfigs = configMapper.query(queryConfig);
-        
-        if (ObjectUtils.isEmpty(allConfigs)) {
-            return agentList;
-        }
-
-        List<SysConfig> agentConfigs = allConfigs.stream()
-                .filter(config -> "agent".equals(config.getConfigType()))
-                .collect(Collectors.toList());
-
-        // 创建一个Map来存储llm配置，以apiKey为键
-        Map<String, SysConfig> llmConfigMap = new HashMap<>();
-        allConfigs.stream()
-                .filter(config -> "llm".equals(config.getConfigType()))
-                .forEach(config -> {
-                    if (config.getApiKey() != null) {
-                        llmConfigMap.put(config.getApiKey(), config);
-                    }
-                });
-        
-        // 处理每个agent配置
-        for (SysConfig agentConfig : agentConfigs) {
-            String apiKey = agentConfig.getApiKey();
-            String apiUrl = agentConfig.getApiUrl();
-            Integer configId = agentConfig.getConfigId();
-            Integer userId = agentConfig.getUserId();
-
-            
-            // 检查是否已存在对应的llm配置
-            SysConfig existingLlmConfig = llmConfigMap.get(apiKey);
-            
-            // 如果已存在llm配置，直接创建Agent对象返回
-            if (existingLlmConfig != null) {
-                SysAgent difyAgent = new SysAgent();
-                difyAgent.setConfigId(existingLlmConfig.getConfigId());
-                difyAgent.setProvider("dify");
-                difyAgent.setApiKey(apiKey);
-                difyAgent.setAgentName(existingLlmConfig.getConfigName());
-                difyAgent.setAgentDesc(existingLlmConfig.getConfigDesc());
-                difyAgent.setIsDefault(existingLlmConfig.getIsDefault());
-                difyAgent.setPublishTime(existingLlmConfig.getCreateTime());
-                
-                // 如果前端传入了智能体名称过滤条件，则进行过滤
-                if (StringUtils.hasText(agent.getAgentName())) {
-                    if (difyAgent.getAgentName() != null && 
-                        difyAgent.getAgentName().toLowerCase().contains(agent.getAgentName().toLowerCase())) {
-                        agentList.add(difyAgent);
-                    }
-                } else {
-                    agentList.add(difyAgent);
-                }
-            } else {
-                // 如果不存在llm配置，调用API获取信息并创建新的llm配置
-                SysAgent difyAgent = new SysAgent();
-                difyAgent.setConfigId(configId);
-                difyAgent.setProvider("dify");
-                difyAgent.setApiKey(apiKey);
-                
-                try {
-                    // 调用info API
-                    HttpRequest infoRequest = HttpRequest.newBuilder()
-                            .uri(URI.create(apiUrl + "/info"))
-                            .header("Authorization", "Bearer " + apiKey)
-                            .header("Content-Type", "application/json")
-                            .GET()
-                            .build();
-                    
-                    HttpResponse<String> infoResponse = httpClient.send(infoRequest, 
-                            HttpResponse.BodyHandlers.ofString());
-                    
-                    if (infoResponse.statusCode() == 200) {
-                        JsonNode infoNode = objectMapper.readTree(infoResponse.body());
-                        String name = infoNode.has("name") ? infoNode.get("name").asText() : "DIFY Agent";
-                        String description = infoNode.has("description") ? infoNode.get("description").asText() : "";
-                        
-                        difyAgent.setAgentName(name);
-                        difyAgent.setAgentDesc(description);
-                        
-                        // 创建新的llm配置
-                        SysConfig newLlmConfig = new SysConfig();
-                        newLlmConfig.setUserId(userId);
-                        newLlmConfig.setConfigType("llm");
-                        newLlmConfig.setProvider("dify");
-                        newLlmConfig.setApiKey(apiKey);
-                        newLlmConfig.setConfigName(name);
-                        newLlmConfig.setConfigDesc(description);
-                        newLlmConfig.setApiUrl(apiUrl);
-                        newLlmConfig.setState(SysDevice.DEVICE_STATE_ONLINE);  // 默认启用
-                        
-                        // 添加到数据库
-                        try {
-                            configMapper.add(newLlmConfig);
-                            logger.debug("添加DIFY LLM配置成功: {}", apiKey);
-                            difyAgent.setConfigId(newLlmConfig.getConfigId());
-                        } catch (Exception e) {
-                            logger.error("添加DIFY LLM配置失败: {}", e.getMessage());
-                        }
-                        
-                        // 获取图标信息
-                        try {
-                            HttpRequest metaRequest = HttpRequest.newBuilder()
-                                    .uri(URI.create(apiUrl + "/meta"))
-                                    .header("Authorization", "Bearer " + apiKey)
-                                    .header("Content-Type", "application/json")
-                                    .GET()
-                                    .build();
-                            
-                            HttpResponse<String> metaResponse = httpClient.send(metaRequest, 
-                                    HttpResponse.BodyHandlers.ofString());
-                            
-                            if (metaResponse.statusCode() == 200) {
-                                JsonNode metaNode = objectMapper.readTree(metaResponse.body());
-                                if (metaNode.has("tool_icons") && metaNode.get("tool_icons").has("api_tool")) {
-                                    JsonNode apiTool = metaNode.get("tool_icons").get("api_tool");
-                                    if (apiTool.has("content")) {
-                                        String iconContent = apiTool.get("content").asText();
-                                        difyAgent.setIconUrl(iconContent);
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            logger.error("获取DIFY meta信息异常", e);
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.error("查询DIFY智能体信息异常", e);
-                    difyAgent.setAgentName(agentConfig.getConfigName() != null ? agentConfig.getConfigName() : "DIFY Agent");
-                    difyAgent.setAgentDesc("无法连接到DIFY API");
-                }
-                
-                // 如果前端传入了智能体名称过滤条件，则进行过滤
-                if (StringUtils.hasText(agent.getAgentName())) {
-                    if (difyAgent.getAgentName() != null && 
-                        difyAgent.getAgentName().toLowerCase().contains(agent.getAgentName().toLowerCase())) {
-                        agentList.add(difyAgent);
-                    }
-                } else {
-                    agentList.add(difyAgent);
-                }
-            }
-        }
-        
-        return agentList;
+        return getAgentsByProvider(agent, "dify");
     }
 
-
     /**
-     * 从DIFY API获取智能体信息，并与数据库同步
+     * 从星辰平台获取智能体信息，并与数据库同步
      *
      * @param agent 智能体信息
      * @return 智能体集合
      */
     private List<SysAgent> getXingChenAgents(SysAgent agent) {
+        return getAgentsByProvider(agent, "xingchen");
+    }
+
+    /**
+     * 通用的按供应商获取智能体列表方法，查询配置并与数据库同步
+     *
+     * @param agent        智能体查询条件
+     * @param providerName 供应商名称
+     * @return 智能体集合
+     */
+    private List<SysAgent> getAgentsByProvider(SysAgent agent, String providerName) {
         List<SysAgent> agentList = new ArrayList<>();
 
-        // 查询所有类型的Dify配置
+        // 查询所有类型的配置
         SysConfig queryConfig = new SysConfig();
-        queryConfig.setProvider("xingchen");
+        queryConfig.setProvider(providerName);
         List<SysConfig> allConfigs = configMapper.query(queryConfig);
 
         if (ObjectUtils.isEmpty(allConfigs)) {
@@ -298,69 +161,149 @@ public class SysAgentServiceImpl implements SysAgentService {
         // 处理每个agent配置
         for (SysConfig agentConfig : agentConfigs) {
             String apiKey = agentConfig.getApiKey();
-            String apiUrl = agentConfig.getApiUrl();
             Integer configId = agentConfig.getConfigId();
-            Integer userId = agentConfig.getUserId();
 
             // 检查是否已存在对应的llm配置
             SysConfig existingLlmConfig = llmConfigMap.get(apiKey);
 
             // 如果已存在llm配置，直接创建Agent对象返回
             if (existingLlmConfig != null) {
-                SysAgent difyAgent = new SysAgent();
-                difyAgent.setConfigId(existingLlmConfig.getConfigId());
-                difyAgent.setProvider("xingchen");
-                difyAgent.setApiKey(apiKey);
-                difyAgent.setAgentName(existingLlmConfig.getConfigName());
-                difyAgent.setAgentDesc(existingLlmConfig.getConfigDesc());
-                difyAgent.setIsDefault(existingLlmConfig.getIsDefault());
-                difyAgent.setPublishTime(existingLlmConfig.getCreateTime());
+                SysAgent providerAgent = new SysAgent();
+                providerAgent.setConfigId(existingLlmConfig.getConfigId());
+                providerAgent.setProvider(providerName);
+                providerAgent.setApiKey(apiKey);
+                providerAgent.setAgentName(existingLlmConfig.getConfigName());
+                providerAgent.setAgentDesc(existingLlmConfig.getConfigDesc());
+                providerAgent.setIsDefault(existingLlmConfig.getIsDefault());
+                providerAgent.setPublishTime(existingLlmConfig.getCreateTime());
 
                 // 如果前端传入了智能体名称过滤条件，则进行过滤
                 if (StringUtils.hasText(agent.getAgentName())) {
-                    if (difyAgent.getAgentName() != null &&
-                            difyAgent.getAgentName().toLowerCase().contains(agent.getAgentName().toLowerCase())) {
-                        agentList.add(difyAgent);
+                    if (providerAgent.getAgentName() != null &&
+                            providerAgent.getAgentName().toLowerCase().contains(agent.getAgentName().toLowerCase())) {
+                        agentList.add(providerAgent);
                     }
                 } else {
-                    agentList.add(difyAgent);
+                    agentList.add(providerAgent);
                 }
             } else {
                 // 如果不存在llm配置，调用API获取信息并创建新的llm配置
-                SysAgent difyAgent = new SysAgent();
-                difyAgent.setConfigId(configId);
-                difyAgent.setProvider("xingchen");
-                difyAgent.setApiKey(apiKey);
+                SysAgent providerAgent = new SysAgent();
+                providerAgent.setConfigId(configId);
+                providerAgent.setProvider(providerName);
+                providerAgent.setApiKey(apiKey);
 
-                String name =  "XingChen Agent";
-                String description = "";
-
-                difyAgent.setAgentName(name);
-                difyAgent.setAgentDesc(description);
+                // 获取智能体详细信息（不同供应商有不同的获取方式）
+                fetchAgentInfo(providerName, agentConfig, providerAgent);
 
                 // 创建新的llm配置
                 SysConfig newLlmConfig = new SysConfig();
-                newLlmConfig.setUserId(userId);
+                newLlmConfig.setUserId(agentConfig.getUserId());
                 newLlmConfig.setConfigType("llm");
-                newLlmConfig.setProvider("xingchen");
+                newLlmConfig.setProvider(providerName);
                 newLlmConfig.setApiKey(apiKey);
-                newLlmConfig.setConfigName(name);
-                newLlmConfig.setConfigDesc(description);
-                newLlmConfig.setApiUrl(apiUrl);
+                newLlmConfig.setConfigName(providerAgent.getAgentName());
+                newLlmConfig.setConfigDesc(providerAgent.getAgentDesc());
+                newLlmConfig.setApiUrl(agentConfig.getApiUrl());
                 newLlmConfig.setState(SysDevice.DEVICE_STATE_ONLINE);  // 默认启用
 
                 // 添加到数据库
                 try {
                     configMapper.add(newLlmConfig);
-                    logger.debug("添加xingchen LLM配置成功: {}", apiKey);
-                    difyAgent.setConfigId(newLlmConfig.getConfigId());
+                    logger.debug("添加{} LLM配置成功: {}", providerName, apiKey);
+                    providerAgent.setConfigId(newLlmConfig.getConfigId());
                 } catch (Exception e) {
-                    logger.error("添加xingchen LLM配置失败: {}", e.getMessage());
+                    logger.error("添加{} LLM配置失败: {}", providerName, e.getMessage());
+                }
+
+                // 如果前端传入了智能体名称过滤条件，则进行过滤
+                if (StringUtils.hasText(agent.getAgentName())) {
+                    if (providerAgent.getAgentName() != null &&
+                            providerAgent.getAgentName().toLowerCase().contains(agent.getAgentName().toLowerCase())) {
+                        agentList.add(providerAgent);
+                    }
+                } else {
+                    agentList.add(providerAgent);
                 }
             }
         }
 
         return agentList;
+    }
+
+    /**
+     * 根据不同供应商获取智能体详细信息（名称、描述、图标等）
+     *
+     * @param provider    供应商名称
+     * @param agentConfig 智能体配置
+     * @param agentResult 用于填充结果的智能体对象
+     */
+    private void fetchAgentInfo(String provider, SysConfig agentConfig, SysAgent agentResult) {
+        String apiKey = agentConfig.getApiKey();
+        String apiUrl = agentConfig.getApiUrl();
+
+        if ("dify".equalsIgnoreCase(provider)) {
+            try {
+                // 调用info API
+                HttpRequest infoRequest = HttpRequest.newBuilder()
+                        .uri(URI.create(apiUrl + "/info"))
+                        .header("Authorization", "Bearer " + apiKey)
+                        .header("Content-Type", "application/json")
+                        .GET()
+                        .build();
+
+                HttpResponse<String> infoResponse = httpClient.send(infoRequest,
+                        HttpResponse.BodyHandlers.ofString());
+
+                if (infoResponse.statusCode() == 200) {
+                    JsonNode infoNode = objectMapper.readTree(infoResponse.body());
+                    String name = infoNode.has("name") ? infoNode.get("name").asText() : "DIFY Agent";
+                    String description = infoNode.has("description") ? infoNode.get("description").asText() : "";
+
+                    agentResult.setAgentName(name);
+                    agentResult.setAgentDesc(description);
+
+                    // 获取图标信息
+                    try {
+                        HttpRequest metaRequest = HttpRequest.newBuilder()
+                                .uri(URI.create(apiUrl + "/meta"))
+                                .header("Authorization", "Bearer " + apiKey)
+                                .header("Content-Type", "application/json")
+                                .GET()
+                                .build();
+
+                        HttpResponse<String> metaResponse = httpClient.send(metaRequest,
+                                HttpResponse.BodyHandlers.ofString());
+
+                        if (metaResponse.statusCode() == 200) {
+                            JsonNode metaNode = objectMapper.readTree(metaResponse.body());
+                            if (metaNode.has("tool_icons") && metaNode.get("tool_icons").has("api_tool")) {
+                                JsonNode apiTool = metaNode.get("tool_icons").get("api_tool");
+                                if (apiTool.has("content")) {
+                                    String iconContent = apiTool.get("content").asText();
+                                    agentResult.setIconUrl(iconContent);
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.error("获取DIFY meta信息异常", e);
+                    }
+                } else {
+                    agentResult.setAgentName("DIFY Agent");
+                    agentResult.setAgentDesc("");
+                }
+            } catch (Exception e) {
+                logger.error("查询DIFY智能体信息异常", e);
+                agentResult.setAgentName(agentConfig.getConfigName() != null ? agentConfig.getConfigName() : "DIFY Agent");
+                agentResult.setAgentDesc("无法连接到DIFY API");
+            }
+        } else if ("xingchen".equalsIgnoreCase(provider)) {
+            agentResult.setAgentName("XingChen Agent");
+            agentResult.setAgentDesc("");
+        } else {
+            agentResult.setAgentName(provider + " Agent");
+            agentResult.setAgentDesc("");
+        }
     }
     /**
      * 从Coze API获取智能体列表，并与数据库同步

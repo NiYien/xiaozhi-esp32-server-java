@@ -2,6 +2,7 @@ package com.xiaozhi.dialogue.stt.providers;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
+import com.xiaozhi.common.exception.SttException;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysConfig;
 
@@ -160,8 +161,13 @@ public class FunASRSttService implements SttService {
             if (!recognized) {
 
             }
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            logger.error("FunASR识别等待被中断", e);
+            Thread.currentThread().interrupt();
+        } catch (SttException e) {
             logger.error("FunASR识别过程中发生错误", e);
+        } catch (Exception e) {
+            logger.error("FunASR识别过程中发生未预期的错误", e);
         } finally {
             // 关闭WebSocket连接
             if (webSocketClient.isOpen()) {

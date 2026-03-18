@@ -261,7 +261,7 @@ class SysAgentServiceTest extends BaseUnitTest {
         assertEquals(1, result.size());
         assertEquals("Fallback Name", result.get(0).getAgentName());
         assertEquals("无法连接到DIFY API", result.get(0).getAgentDesc());
-        // 不应尝试写入数据库
-        verify(configMapper, never()).add(any());
+        // 重构后：API失败时仍会创建llm配置（缓存fallback结果，避免重复请求失败API）
+        verify(configMapper, times(1)).add(any());
     }
 }

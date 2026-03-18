@@ -9,6 +9,7 @@ import com.alibaba.dashscope.audio.omni.*;
 import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.dashscope.exception.NoApiKeyException;
 import com.google.gson.JsonObject;
+import com.xiaozhi.common.exception.SttException;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.utils.AudioUtils;
@@ -72,8 +73,11 @@ public class AliyunSttService implements SttService {
                 }
                 return streamRecognitionParaformer(audioSink, actualModel);
             }
-        } catch (Exception e) {
+        } catch (SttException e) {
             logger.error("使用{}模型语音识别失败：", model, e);
+            return "";
+        } catch (Exception e) {
+            logger.error("使用{}模型语音识别发生未预期的错误：", model, e);
             return "";
         }
     }
@@ -218,8 +222,15 @@ public class AliyunSttService implements SttService {
                 logger.warn("语音识别超时({})", model);
             }
 
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            logger.error("流式识别等待被中断({})", model, e);
+            Thread.currentThread().interrupt();
+            hasError.set(true);
+        } catch (SttException e) {
             logger.error("流式识别过程中发生错误({})", model, e);
+            hasError.set(true);
+        } catch (Exception e) {
+            logger.error("流式识别过程中发生未预期的错误({})", model, e);
             hasError.set(true);
         } finally {
             // 关闭 websocket 连接
@@ -371,8 +382,23 @@ public class AliyunSttService implements SttService {
                     logger.error("关闭连接时发生错误", e);
                 }
             }
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            logger.error("流式识别等待被中断({})", model, e);
+            Thread.currentThread().interrupt();
+            hasError.set(true);
+        } catch (SttException e) {
             logger.error("流式识别过程中发生错误({})", model, e);
+            hasError.set(true);
+            // 发生异常时尝试关闭连接
+            try {
+                if (conversationRef.get() != null) {
+                    conversationRef.get().close(1000, "error");
+                }
+            } catch (Exception ex) {
+                logger.error("关闭连接时发生错误", ex);
+            }
+        } catch (Exception e) {
+            logger.error("流式识别过程中发生未预期的错误({})", model, e);
             hasError.set(true);
             // 发生异常时尝试关闭连接
             try {

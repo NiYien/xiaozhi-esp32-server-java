@@ -4,13 +4,14 @@ import com.fasterxml.jackson.databind.node.JsonNodeType;
 import com.xiaozhi.communication.common.ChatSession;
 import com.xiaozhi.communication.common.SessionManager;
 import com.xiaozhi.communication.domain.iot.IotDescriptor;
+import com.xiaozhi.communication.domain.iot.IotMethodParameter;
 import com.xiaozhi.communication.domain.iot.IotProperty;
 import com.xiaozhi.communication.domain.iot.IotState;
 import com.xiaozhi.dialogue.llm.tool.ToolCallStringResultConverter;
 import com.xiaozhi.dialogue.llm.tool.ToolsSessionHolder;
 import com.xiaozhi.utils.JsonUtil;
 import jakarta.annotation.Resource;
-import org.apache.commons.text.StringSubstitutor;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ToolContext;
@@ -22,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 
 /**
  * Iot服务 - 负责iot处理和WebSocket发送
@@ -187,6 +189,65 @@ public class IotService {
     }
 
     /**
+     * 构建统一的函数名称，所有部分转为小写
+     *
+     * @param iotName    设备名称
+     * @param actionType 操作类型（如 "get"、方法名等）
+     * @param actionName 操作名称（属性名或方法名）
+     * @return 统一格式的函数名称
+     */
+    private String buildFunctionName(String iotName, String actionType, String actionName) {
+        return ("iot_" + actionType + "_" + iotName + "_" + actionName).toLowerCase();
+    }
+
+    /**
+     * 构建方法参数的JSON Schema，支持多参数
+     *
+     * @param parameters 方法参数定义
+     * @return JSON Schema字符串
+     */
+    private String buildInputSchema(Map<String, IotMethodParameter> parameters) {
+        // 构建properties部分
+        StringBuilder properties = new StringBuilder();
+        StringJoiner requiredJoiner = new StringJoiner(", ");
+        boolean first = true;
+        for (var paramEntry : parameters.entrySet()) {
+            var paramName = paramEntry.getKey();
+            var paramInfo = paramEntry.getValue();
+            if (!first) {
+                properties.append(",\n");
+            }
+            first = false;
+            properties.append(String.format("""
+                                    "%s": {
+                                        "type": "%s",
+                                        "description": "%s"
+                                    }""", paramName, paramInfo.getType(), paramInfo.getDescription()));
+            requiredJoiner.add("\"" + paramName + "\"");
+        }
+        // 添加response_success参数
+        if (!first) {
+            properties.append(",\n");
+        }
+        properties.append("""
+                                    "response_success": {
+                                        "type": "string",
+                                        "description": "操作成功时的友好回复,关于该设备的操作结果，设备名称使用description中的名称，不要出现占位符"
+                                    }""");
+        requiredJoiner.add("\"response_success\"");
+
+        return String.format("""
+                    {
+                        "type": "object",
+                        "properties": {
+                            %s
+                        },
+                        "required": [%s]
+                    }
+                """, properties.toString(), requiredJoiner.toString());
+    }
+
+    /**
      * 注册iot设备的属性的查询方法到FunctionHolder
      *
      * @param sessionId          会话ID
@@ -199,8 +260,8 @@ public class IotService {
         for (var entry : iotDescriptor.getProperties().entrySet()) {
             var propName = entry.getKey();
             var propInfo = entry.getValue();
-            // 创建函数名称，格式：iot_get_{IoTName}_{PropName}
-            var funcName = "iot_get_" + iotName.toLowerCase() + "_" + propName.toLowerCase();
+            // 创建函数名称，格式：iot_get_{iotname}_{propname}，统一小写
+            var funcName = buildFunctionName(iotName, "get", propName);
             var toolCallback = FunctionToolCallback
                     .builder(funcName, (Map<String, String> params, ToolContext toolContext) -> {
                         Object value = getIotStatus(sessionId, iotName, propName);
@@ -257,38 +318,15 @@ public class IotService {
         for (var entry : iotDescriptor.getMethods().entrySet()) {
             var methodName = entry.getKey();
             var method = entry.getValue();
-            // 创建函数名称，格式：iot_{IoTName}_{MethodName}
-            var funcName = "iot_" + iotName + "_" + methodName;
+            // 创建函数名称，格式：iot_{iotname}_{methodname}，统一小写
+            var funcName = ("iot_" + iotName + "_" + methodName).toLowerCase();
 
-            Map<String, String> valueMap = new HashMap<>();
-            //获取iotMethod方法参数，添加到函数参数中。 iot方法都是单参数
-            for (var paramEntry : method.getParameters().entrySet()) {
-                var paramName = paramEntry.getKey();
-                var paramInfo = paramEntry.getValue();
-                valueMap.put("paramName", paramName);
-                valueMap.put("paramType", paramInfo.getType());
-                valueMap.put("paramDescription", paramInfo.getDescription());
-            }
-            String inputSchema = StringSubstitutor.replace("""
-                        {
-                            "type": "object",
-                            "properties": {
-                                "${paramName}": {
-                                    "type": "${paramType}",
-                                    "description": "${paramDescription}"
-                                },
-                                "response_success": {
-                                    "type": "string",
-                                    "description": "操作成功时的友好回复,关于该设备的操作结果，设备名称使用description中的名称，不要出现占位符"
-                                }
-                            },
-                            "required": ["${paramName}", "response_success"]
-                        }
-                    """, valueMap);
+            // 构建支持多参数的inputSchema
+            String inputSchema = buildInputSchema(method.getParameters());
 
             var toolCallback = FunctionToolCallback
                     .builder(funcName, (Map<String, Object> params, ToolContext toolContext) -> {
-                        String actFuncName = funcName.replace("iot_" + iotName + "_", ""); // 原始方法调用，去掉iot_iotName_前缀
+                        String actFuncName = methodName; // 直接使用原始方法名
                         String response_success = (String) params.get("response_success");
                         params.remove("response_success"); // 移除response_success参数，避免传递给设备
                         boolean result = sendIotMessage(sessionId, iotName, actFuncName, params);

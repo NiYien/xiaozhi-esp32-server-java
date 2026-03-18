@@ -9,6 +9,7 @@ import com.tencent.asrv2.SpeechRecognizerRequest;
 import com.tencent.asrv2.SpeechRecognizerResponse;
 import com.tencent.core.ws.Credential;
 import com.tencent.core.ws.SpeechClient;
+import com.xiaozhi.common.exception.SttException;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.utils.AudioUtils;
@@ -126,8 +127,14 @@ public class TencentSttService implements SttService {
             String result = sendRequest(requestBody, authHeaders);
 
             return result;
-        } catch (Exception e) {
+        } catch (IOException e) {
+            logger.error("处理音频时发生IO错误！", e);
+            return null;
+        } catch (SttException e) {
             logger.error("处理音频时发生错误！", e);
+            return null;
+        } catch (Exception e) {
+            logger.error("处理音频时发生未预期的错误！", e);
             return null;
         }
     }
@@ -320,8 +327,13 @@ public class TencentSttService implements SttService {
                 }
             }
 
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            logger.error("等待语音识别完成时被中断", e);
+            Thread.currentThread().interrupt();
+        } catch (SttException e) {
             logger.error("创建语音识别会话时发生错误", e);
+        } catch (Exception e) {
+            logger.error("创建语音识别会话时发生未预期的错误", e);
         }
         
         return finalResult.get();

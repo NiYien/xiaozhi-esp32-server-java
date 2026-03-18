@@ -1,6 +1,7 @@
 package com.xiaozhi.dialogue.tts.providers;
 
 import com.k2fsa.sherpa.onnx.*;
+import com.xiaozhi.common.exception.TtsException;
 import com.xiaozhi.dialogue.tts.TtsService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.utils.AudioUtils;
@@ -121,9 +122,12 @@ public class SherpaOnnxTtsService implements TtsService {
             AudioUtils.saveAsWav(Path.of(outPath), pcmData);
 
             return outPath;
+        } catch (TtsException e) {
+            logger.error("sherpa-onnx 语音合成失败 - 模型路径: {}, 错误: {}", modelPath, e.getMessage(), e);
+            throw e;
         } catch (Exception e) {
             logger.error("sherpa-onnx 语音合成失败 - 模型路径: {}, 错误: {}", modelPath, e.getMessage(), e);
-            throw new Exception("本地语音合成失败: " + e.getMessage());
+            throw new TtsException("本地语音合成失败: " + e.getMessage(), e);
         }
     }
 

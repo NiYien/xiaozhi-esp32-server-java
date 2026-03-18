@@ -6,6 +6,7 @@ import com.alibaba.nls.client.protocol.SampleRateEnum;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriber;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberListener;
 import com.alibaba.nls.client.protocol.asr.SpeechTranscriberResponse;
+import com.xiaozhi.common.exception.SttException;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.dialogue.token.TokenService;
 import com.xiaozhi.entity.SysConfig;
@@ -272,8 +273,17 @@ public class AliyunNlsSttService implements SttService {
             logger.debug("阿里云NLS识别结果: {}", result);
             return result;
 
-        } catch (Exception e) {
+        } catch (InterruptedException e) {
+            logger.error("阿里云NLS实时识别等待被中断", e);
+            Thread.currentThread().interrupt();
+            return "";
+        } catch (SttException e) {
             logger.error("阿里云NLS实时识别失败", e);
+            // 连接异常时清除缓存，下次调用时重建client
+            globalClientCache.remove(config.getConfigId());
+            return "";
+        } catch (Exception e) {
+            logger.error("阿里云NLS实时识别发生未预期的错误", e);
             // 连接异常时清除缓存，下次调用时重建client
             globalClientCache.remove(config.getConfigId());
             return "";

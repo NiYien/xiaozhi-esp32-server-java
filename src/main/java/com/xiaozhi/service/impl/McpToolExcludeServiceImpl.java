@@ -53,92 +53,40 @@ public class McpToolExcludeServiceImpl extends BaseServiceImpl implements McpToo
     @Transactional
     @CacheEvict(value = CACHE_NAME, allEntries = true)
     public void toggleRoleToolStatus(Integer roleId, String toolName, String serverName, boolean enabled) {
-        String bindType = "mcp_server";
-        String bindCode = serverName;
-        String bindKey = roleId.toString();
-        
-        // 查询现有配置
-        List<SysMcpToolExclude> existingConfigs = mcpToolExcludeMapper.selectByCondition(
-            "role", bindType, bindCode, bindKey);
-        
-        if (enabled) {
-            // 启用工具：从排除列表中移除
-            if (!existingConfigs.isEmpty()) {
-                SysMcpToolExclude config = existingConfigs.get(0);
-                List<String> excludeList = parseExcludeTools(config.getExcludeTools());
-                excludeList.remove(toolName);
-                
-                if (excludeList.isEmpty()) {
-                    // 如果没有排除的工具了，删除配置
-                    mcpToolExcludeMapper.delete(config.getId());
-                } else {
-                    // 更新排除列表
-                    try {
-                        config.setExcludeTools(objectMapper.writeValueAsString(excludeList));
-                        config.setUpdateTime(LocalDateTime.now());
-                        mcpToolExcludeMapper.update(config);
-                    } catch (Exception e) {
-                        logger.error("更新排除工具列表失败", e);
-                        throw new RuntimeException("更新失败", e);
-                    }
-                }
-            }
-        } else {
-            // 禁用工具：添加到排除列表
-            if (existingConfigs.isEmpty()) {
-                // 创建新配置
-                SysMcpToolExclude newConfig = new SysMcpToolExclude();
-                newConfig.setExcludeType("role");
-                newConfig.setBindType(bindType);
-                newConfig.setBindCode(bindCode);
-                newConfig.setBindKey(bindKey);
-                try {
-                    newConfig.setExcludeTools(objectMapper.writeValueAsString(Arrays.asList(toolName)));
-                    newConfig.setCreateTime(LocalDateTime.now());
-                    newConfig.setUpdateTime(LocalDateTime.now());
-                    mcpToolExcludeMapper.add(newConfig);
-                } catch (Exception e) {
-                    logger.error("创建排除工具配置失败", e);
-                    throw new RuntimeException("创建失败", e);
-                }
-            } else {
-                // 更新现有配置
-                SysMcpToolExclude config = existingConfigs.get(0);
-                List<String> excludeList = parseExcludeTools(config.getExcludeTools());
-                if (!excludeList.contains(toolName)) {
-                    excludeList.add(toolName);
-                    try {
-                        config.setExcludeTools(objectMapper.writeValueAsString(excludeList));
-                        config.setUpdateTime(LocalDateTime.now());
-                        mcpToolExcludeMapper.update(config);
-                    } catch (Exception e) {
-                        logger.error("更新排除工具列表失败", e);
-                        throw new RuntimeException("更新失败", e);
-                    }
-                }
-            }
-        }
+        toggleToolStatus(toolName, serverName, enabled, "role", roleId.toString());
     }
-    
+
     @Override
     @Transactional
     @CacheEvict(value = CACHE_NAME, allEntries = true)
     public void toggleGlobalToolStatus(String toolName, String serverName, boolean enabled) {
+        toggleToolStatus(toolName, serverName, enabled, "global", "0");
+    }
+
+    /**
+     * 切换工具启用/禁用状态的通用实现
+     *
+     * @param toolName    工具名称
+     * @param serverName  服务器名称
+     * @param enabled     是否启用
+     * @param excludeType 排除类型（"role" 或 "global"）
+     * @param bindKey     绑定键（角色ID 或 "0"）
+     */
+    private void toggleToolStatus(String toolName, String serverName, boolean enabled, String excludeType, String bindKey) {
         String bindType = "mcp_server";
         String bindCode = serverName;
-        String bindKey = "0";
-        
+
         // 查询现有配置
         List<SysMcpToolExclude> existingConfigs = mcpToolExcludeMapper.selectByCondition(
-            "global", bindType, bindCode, bindKey);
-        
+            excludeType, bindType, bindCode, bindKey);
+
         if (enabled) {
             // 启用工具：从排除列表中移除
             if (!existingConfigs.isEmpty()) {
                 SysMcpToolExclude config = existingConfigs.get(0);
                 List<String> excludeList = parseExcludeTools(config.getExcludeTools());
                 excludeList.remove(toolName);
-                
+
                 if (excludeList.isEmpty()) {
                     // 如果没有排除的工具了，删除配置
                     mcpToolExcludeMapper.delete(config.getId());
@@ -159,7 +107,7 @@ public class McpToolExcludeServiceImpl extends BaseServiceImpl implements McpToo
             if (existingConfigs.isEmpty()) {
                 // 创建新配置
                 SysMcpToolExclude newConfig = new SysMcpToolExclude();
-                newConfig.setExcludeType("global");
+                newConfig.setExcludeType(excludeType);
                 newConfig.setBindType(bindType);
                 newConfig.setBindCode(bindCode);
                 newConfig.setBindKey(bindKey);
@@ -194,32 +142,31 @@ public class McpToolExcludeServiceImpl extends BaseServiceImpl implements McpToo
     @Override
     @Cacheable(value = CACHE_NAME, key = "'role_disabled:' + #roleId")
     public List<String> getRoleDisabledTools(Integer roleId) {
-        List<String> allDisabled = new ArrayList<>();
-        
-        // 查询所有角色的禁用工具配置
-        List<SysMcpToolExclude> configs = mcpToolExcludeMapper.selectByCondition(
-            "role", null, null, roleId.toString());
-        
-        for (SysMcpToolExclude config : configs) {
-            allDisabled.addAll(parseExcludeTools(config.getExcludeTools()));
-        }
-        
-        return allDisabled;
+        return getDisabledToolsByCondition("role", roleId.toString());
     }
-    
+
     @Override
     @Cacheable(value = CACHE_NAME, key = "'global_disabled'")
     public List<String> getGlobalDisabledTools() {
+        return getDisabledToolsByCondition("global", "0");
+    }
+
+    /**
+     * 根据条件查询禁用工具列表的通用实现
+     *
+     * @param excludeType 排除类型（"role" 或 "global"）
+     * @param bindKey     绑定键（角色ID 或 "0"）
+     */
+    private List<String> getDisabledToolsByCondition(String excludeType, String bindKey) {
         List<String> allDisabled = new ArrayList<>();
-        
-        // 查询所有全局禁用工具配置
+
         List<SysMcpToolExclude> configs = mcpToolExcludeMapper.selectByCondition(
-            "global", null, null, "0");
-        
+            excludeType, null, null, bindKey);
+
         for (SysMcpToolExclude config : configs) {
             allDisabled.addAll(parseExcludeTools(config.getExcludeTools()));
         }
-        
+
         return allDisabled;
     }
     

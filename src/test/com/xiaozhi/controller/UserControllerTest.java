@@ -6,10 +6,13 @@ import com.xiaozhi.common.exception.UserPasswordNotMatchException;
 import com.xiaozhi.common.exception.UsernameNotFoundException;
 import com.xiaozhi.dto.param.LoginParam;
 import com.xiaozhi.dto.param.RegisterParam;
-import com.xiaozhi.entity.SysAuthRole;
+import com.xiaozhi.dto.response.LoginResponseDTO;
 import com.xiaozhi.entity.SysUser;
 import com.xiaozhi.security.AuthenticationService;
 import com.xiaozhi.service.*;
+import com.xiaozhi.service.auth.LoginResponseBuilder;
+import com.xiaozhi.service.auth.CaptchaValidator;
+import com.xiaozhi.service.auth.UserExistenceChecker;
 import com.xiaozhi.utils.CaptchaUtils;
 import com.xiaozhi.utils.CmsUtils;
 import com.xiaozhi.utils.EmailUtils;
@@ -55,10 +58,13 @@ class UserControllerTest {
     private SysUserAuthService userAuthService;
 
     @Mock
-    private SysAuthRoleService authRoleService;
+    private LoginResponseBuilder loginResponseBuilder;
 
     @Mock
-    private SysPermissionService permissionService;
+    private CaptchaValidator captchaValidator;
+
+    @Mock
+    private UserExistenceChecker userExistenceChecker;
 
     @Mock
     private SmsUtils smsUtils;
@@ -82,13 +88,12 @@ class UserControllerTest {
     @Test
     void login_success_returnsTokenAndUserInfo() throws Exception {
         SysUser user = buildTestUser();
-        SysAuthRole role = buildTestRole();
+        LoginResponseDTO responseDTO = LoginResponseDTO.builder()
+                .token("mock-token-abc").userId(1).expiresIn(2592000).build();
 
         when(userService.login("admin", "123456")).thenReturn(user);
         when(userService.update(any(SysUser.class))).thenReturn(1);
-        when(authRoleService.selectById(anyInt())).thenReturn(role);
-        when(permissionService.selectByUserId(anyInt())).thenReturn(Collections.emptyList());
-        when(permissionService.buildPermissionTree(anyList())).thenReturn(Collections.emptyList());
+        when(loginResponseBuilder.buildResponse(any(SysUser.class), eq("mock-token-abc"))).thenReturn(responseDTO);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class);
              MockedStatic<CmsUtils> cmsMock = mockStatic(CmsUtils.class)) {
@@ -149,9 +154,10 @@ class UserControllerTest {
 
     @Test
     void register_success_createsUser() throws Exception {
-        when(userService.queryCaptcha(any(SysUser.class))).thenReturn(1);
-        when(userService.selectUserByUsername("newuser")).thenReturn(null);
-        when(userService.selectUserByEmail("new@test.com")).thenReturn(null);
+        // captchaValidator.validate() 不抛异常即为通过
+        doNothing().when(captchaValidator).validate(eq("123456"), eq("new@test.com"));
+        // userExistenceChecker.ensureNotExists() 不抛异常即为通过
+        doNothing().when(userExistenceChecker).ensureNotExists(eq("new@test.com"), isNull(), eq("newuser"), isNull());
         when(authenticationService.encryptPassword("password1")).thenReturn("encrypted");
         when(userService.add(any(SysUser.class))).thenReturn(1);
 
@@ -170,9 +176,11 @@ class UserControllerTest {
 
     @Test
     void register_duplicateEmail_returnsError() throws Exception {
-        when(userService.queryCaptcha(any(SysUser.class))).thenReturn(1);
-        when(userService.selectUserByUsername("newuser")).thenReturn(null);
-        when(userService.selectUserByEmail("exists@test.com")).thenReturn(buildTestUser());
+        // captchaValidator.validate() 不抛异常即为通过
+        doNothing().when(captchaValidator).validate(eq("123456"), eq("exists@test.com"));
+        // userExistenceChecker 抛出异常表示邮箱已注册
+        doThrow(new UserExistenceChecker.UserExistsException("邮箱已注册"))
+                .when(userExistenceChecker).ensureNotExists(eq("exists@test.com"), isNull(), eq("newuser"), isNull());
 
         RegisterParam param = new RegisterParam();
         param.setUsername("newuser");
@@ -193,12 +201,11 @@ class UserControllerTest {
     @Test
     void checkToken_valid_returnsUserInfo() throws Exception {
         SysUser user = buildTestUser();
-        SysAuthRole role = buildTestRole();
+        LoginResponseDTO responseDTO = LoginResponseDTO.builder()
+                .token("valid-token").userId(1).expiresIn(2592000).build();
 
         when(userService.selectUserByUserId(1)).thenReturn(user);
-        when(authRoleService.selectById(anyInt())).thenReturn(role);
-        when(permissionService.selectByUserId(1)).thenReturn(Collections.emptyList());
-        when(permissionService.buildPermissionTree(anyList())).thenReturn(Collections.emptyList());
+        when(loginResponseBuilder.buildResponse(any(SysUser.class), eq("valid-token"))).thenReturn(responseDTO);
 
         try (MockedStatic<StpUtil> stpMock = mockStatic(StpUtil.class)) {
             stpMock.when(StpUtil::getLoginId).thenReturn(1);
@@ -239,10 +246,4 @@ class UserControllerTest {
         return user;
     }
 
-    private SysAuthRole buildTestRole() {
-        SysAuthRole role = new SysAuthRole();
-        role.setRoleId(2);
-        role.setRoleName("普通用户");
-        return role;
-    }
 }

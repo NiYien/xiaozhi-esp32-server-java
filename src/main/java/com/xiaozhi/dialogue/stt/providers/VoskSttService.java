@@ -1,5 +1,6 @@
 package com.xiaozhi.dialogue.stt.providers;
 
+import com.xiaozhi.common.exception.SttException;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.utils.AudioUtils;
 import jakarta.annotation.PostConstruct;
@@ -127,8 +128,11 @@ public class VoskSttService implements SttService {
             JSONObject jsonFinal = new JSONObject(finalResult);
             return jsonFinal.getString("text").replaceAll("\\s+", "");
 
-        } catch (Exception e) {
+        } catch (SttException e) {
             logger.error("处理音频时发生错误！", e);
+            return null;
+        } catch (Exception e) {
+            logger.error("处理音频时发生未预期的错误！", e);
             return null;
         }
     }
@@ -206,8 +210,10 @@ public class VoskSttService implements SttService {
                     finalResult.append(text);
                 }
 
-            } catch (Exception e) {
+            } catch (SttException e) {
                 logger.error("Vosk流式识别过程中发生错误", e);
+            } catch (Exception e) {
+                logger.error("Vosk流式识别过程中发生未预期的错误", e);
             }
         });
 

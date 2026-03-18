@@ -2,6 +2,7 @@ package com.xiaozhi.dialogue.tts.providers;
 
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.xiaozhi.common.exception.TtsException;
 import com.xiaozhi.dialogue.tts.TtsService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.utils.AudioUtils;
@@ -209,9 +210,12 @@ public class VolcengineTtsService implements TtsService {
                     return false;
                 }
             }
+        } catch (java.io.IOException e) {
+            logger.error("发送TTS请求时发生IO错误", e);
+            throw new TtsException("发送TTS请求失败", e);
         } catch (Exception e) {
             logger.error("发送TTS请求时发生错误", e);
-            throw new Exception("发送TTS请求失败", e);
+            throw new TtsException("发送TTS请求失败", e);
         }
     }
 

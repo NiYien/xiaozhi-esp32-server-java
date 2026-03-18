@@ -39,6 +39,8 @@ import java.util.*;
 public class DialogueService{
     private static final Logger logger = LoggerFactory.getLogger(DialogueService.class);
 
+    private static final String ABORT_REASON_VAD_INTERRUPT = "检测到vad";
+
     @Resource
     private ChatService chatService;
 
@@ -105,38 +107,65 @@ public class DialogueService{
             // 检测到语音活动，更新最后活动时间
             sessionManager.updateLastActivity(sessionId);
             // 根据VAD状态处理
-            switch (vadResult.getStatus()) {
-                case SPEECH_START:
-                    // 先启动STT（同步创建音频流），确保流已准备好
-                    startStt(session, sessionId, vadResult.getProcessedData());
-                    // 再触发abort停止当前播放中的TTS
-                    // 通过Persona.isActive()综合判断整个管道是否活跃（LLM/TTS/Player任一层）
-                    Persona persona = session.getPersona();
-                    if (persona != null && persona.isActive()) {
-                        abortDialogue(session, "检测到vad");
-                    }
-                    break;
-
-                case SPEECH_CONTINUE:
-                    // 语音继续，发送数据到流式识别
-                    if (sessionManager.isStreaming(sessionId)) {
-                        sessionManager.sendAudioData(sessionId, vadResult.getProcessedData());
-                    }
-                    break;
-
-                case SPEECH_END:
-                    // 语音结束，完成流式识别
-                    if (sessionManager.isStreaming(sessionId)) {
-                        sessionManager.completeAudioStream(sessionId);
-                        sessionManager.setStreamingState(sessionId, false);
-                    }
-                    break;
-
-                default:
-                    break;
-            }
+            handleVadStatus(session, vadResult);
         } catch (Exception e) {
             logger.error("处理音频数据失败: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 根据VAD状态分发处理
+     */
+    private void handleVadStatus(ChatSession session, VadService.VadResult vadResult) {
+        switch (vadResult.getStatus()) {
+            case SPEECH_START:
+                handleSpeechStart(session, vadResult.getProcessedData());
+                break;
+
+            case SPEECH_CONTINUE:
+                handleSpeechContinue(session.getSessionId(), vadResult.getProcessedData());
+                break;
+
+            case SPEECH_END:
+                handleSpeechEnd(session.getSessionId());
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /**
+     * 处理语音开始：启动STT并中止当前播放
+     */
+    private void handleSpeechStart(ChatSession session, byte[] processedData) {
+        String sessionId = session.getSessionId();
+        // 先启动STT（同步创建音频流），确保流已准备好
+        startStt(session, sessionId, processedData);
+        // 再触发abort停止当前播放中的TTS
+        // 通过Persona.isActive()综合判断整个管道是否活跃（LLM/TTS/Player任一层）
+        Persona persona = session.getPersona();
+        if (persona != null && persona.isActive()) {
+            abortDialogue(session, ABORT_REASON_VAD_INTERRUPT);
+        }
+    }
+
+    /**
+     * 处理语音继续：发送数据到流式识别
+     */
+    private void handleSpeechContinue(String sessionId, byte[] processedData) {
+        if (sessionManager.isStreaming(sessionId)) {
+            sessionManager.sendAudioData(sessionId, processedData);
+        }
+    }
+
+    /**
+     * 处理语音结束：完成流式识别
+     */
+    private void handleSpeechEnd(String sessionId) {
+        if (sessionManager.isStreaming(sessionId)) {
+            sessionManager.completeAudioStream(sessionId);
+            sessionManager.setStreamingState(sessionId, false);
         }
     }
 
@@ -313,7 +342,7 @@ public class DialogueService{
             // 关闭音频流
             // 注意：当reason是"检测到vad"时，不关闭音频流和重置streaming状态
             // 因为这是用户打断TTS继续说话，startStt已经创建了新的音频流
-            if (!"检测到vad".equals(reason)) {
+            if (!ABORT_REASON_VAD_INTERRUPT.equals(reason)) {
                 sessionManager.closeAudioStream(sessionId);
                 sessionManager.setStreamingState(sessionId, false);
             }

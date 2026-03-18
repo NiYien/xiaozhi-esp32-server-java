@@ -7,6 +7,8 @@ import com.alibaba.dashscope.aigc.multimodalconversation.MultiModalConversationR
 import com.alibaba.dashscope.audio.tts.SpeechSynthesisAudioFormat;
 import com.alibaba.dashscope.audio.tts.SpeechSynthesisParam;
 import com.alibaba.dashscope.audio.tts.SpeechSynthesizer;
+import com.xiaozhi.common.exception.TtsException;
+import com.xiaozhi.dialogue.DialogueConstants;
 import com.xiaozhi.dialogue.tts.TtsService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.utils.AudioUtils;
@@ -34,16 +36,12 @@ public class AliyunTtsService implements TtsService {
     private static final Logger logger = LoggerFactory.getLogger(AliyunTtsService.class);
 
     private static final String PROVIDER_NAME = "aliyun";
-    // 添加重试次数常量
-    private static final int MAX_RETRY_ATTEMPTS = 3;
-    // 添加重试间隔常量（毫秒）
-    private static final long RETRY_DELAY_MS = 1000;
-    // 添加TTS操作超时时间（秒）
+    // TTS操作超时时间（秒）
     private static final long TTS_TIMEOUT_SECONDS = 5;
 
     // 使用共享的线程池，避免频繁创建和销毁
     private static final ExecutorService sharedExecutor = Executors.newCachedThreadPool();
-    
+
     // 音色映射表：将音色名称映射到AudioParameters.Voice枚举
     // 包含所有Qwen音色
     private static final Map<String, AudioParameters.Voice> VOICE_MAP = new HashMap<>();
@@ -95,7 +93,7 @@ public class AliyunTtsService implements TtsService {
     private final String apiKey;
     private final String voiceName;
     private final String outputPath;
-    
+
     // 语音参数
     private final Float pitch;
     private final Float speed;
@@ -221,303 +219,238 @@ public class AliyunTtsService implements TtsService {
                     return ttsCosyvoice(text);
                 }
             }
+        } catch (TtsException e) {
+            logger.error("语音合成aliyun - 使用{}模型语音合成失败：", voiceName, e);
+            throw e;
         } catch (Exception e) {
-            logger.error("语音合成aliyun -使用{}模型语音合成失败：", voiceName, e);
-            throw new Exception("语音合成失败");
+            logger.error("语音合成aliyun - 使用{}模型语音合成失败：", voiceName, e);
+            throw new TtsException("语音合成失败", e);
         }
     }
 
-    private String ttsQwen(String text) {
+    /**
+     * 通用重试框架：在带超时的场景下执行TTS合成
+     * 抽取 ttsQwen/ttsCosyvoice/ttsSambert 中公共的重试循环逻辑
+     *
+     * @param modelDesc 模型描述（用于日志）
+     * @param synthesizer 实际的合成逻辑
+     * @return 音频文件路径
+     */
+    private String executeWithRetry(String modelDesc, TtsSynthesizer synthesizer) {
         int attempts = 0;
-        // 解析音色参数
-        String[] parsed = parseQwenVoiceParam(voiceName);
-        String actualVoiceName = parsed[1];
-
-        while (attempts < MAX_RETRY_ATTEMPTS) {
+        while (attempts < DialogueConstants.MAX_RETRY_ATTEMPTS) {
             try {
-                AudioParameters.Voice voice = VOICE_MAP.get(actualVoiceName);
-                MultiModalConversationParam param = MultiModalConversationParam.builder()
-                        .model("qwen3-tts-flash")
-                        .apiKey(apiKey)
-                        .text(text)
-                        .voice(voice)
-                        .build();
-                
-                // 使用共享线程池而不是每次创建新的
-                Future<MultiModalConversationResult> future = sharedExecutor.submit(() -> {
-                    MultiModalConversation conv = new MultiModalConversation();
-                    return conv.call(param);
-                });
-                
-                // 等待结果，设置超时
-                MultiModalConversationResult result;
-                try {
-                    result = future.get(TTS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                } catch (TimeoutException e) {
-                    future.cancel(true);
-                    logger.warn("语音合成aliyun - 使用{}模型超时，正在重试 ({}/{})", voiceName, attempts + 1, MAX_RETRY_ATTEMPTS);
-                    attempts++;
-                    if (attempts >= MAX_RETRY_ATTEMPTS) {
-                        logger.error("语音合成aliyun - 使用{}模型多次超时，放弃重试", voiceName);
-                        return StrUtil.EMPTY;
-                    }
-                    // 等待一段时间后重试
-                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    continue;
+                String result = synthesizer.synthesize();
+                if (result != null) {
+                    return result;
                 }
-                
-                // 检查结果是否有效
-                if (result == null || result.getOutput() == null || 
-                    result.getOutput().getAudio() == null || 
-                    result.getOutput().getAudio().getUrl() == null) {
-                    
-                    logger.warn("语音合成aliyun - 使用{}模型返回无效结果，正在重试 ({}/{})", voiceName, attempts + 1, MAX_RETRY_ATTEMPTS);
-                    attempts++;
-                    if (attempts >= MAX_RETRY_ATTEMPTS) {
-                        logger.error("语音合成aliyun - 使用{}模型多次返回无效结果，放弃重试", voiceName);
-                        return StrUtil.EMPTY;
-                    }
-                    // 等待一段时间后重试
-                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    continue;
+                // 返回null视为失败，触发重试
+                attempts++;
+                if (attempts < DialogueConstants.MAX_RETRY_ATTEMPTS) {
+                    logger.warn("语音合成aliyun - 使用{}返回无效结果，正在重试 ({}/{})", modelDesc, attempts, DialogueConstants.MAX_RETRY_ATTEMPTS);
+                    TimeUnit.MILLISECONDS.sleep(DialogueConstants.RETRY_DELAY_MS);
+                } else {
+                    logger.error("语音合成aliyun - 使用{}多次返回无效结果，放弃重试", modelDesc);
+                    return StrUtil.EMPTY;
                 }
-                
-                String audioUrl = result.getOutput().getAudio().getUrl();
-                String outPath = outputPath + getAudioFileName();
-                File file = new File(outPath);
-
-                // 下载 WAV（24kHz），重采样到 16kHz 后保存
-                Future<Boolean> downloadFuture = sharedExecutor.submit(() -> {
-                    try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-                         InputStream in = new URL(audioUrl).openStream()) {
-                        byte[] buffer = new byte[4096];
-                        int bytesRead;
-                        while ((bytesRead = in.read(buffer)) != -1) {
-                            baos.write(buffer, 0, bytesRead);
-                        }
-                        byte[] pcm24k = AudioUtils.wavToPcm(baos.toByteArray());
-                        byte[] pcm16k = AudioUtils.resamplePcm(pcm24k, 24000, 16000);
-                        AudioUtils.saveAsWav(file.toPath(), pcm16k);
-                        return true;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                });
-
-                try {
-                    Boolean downloadSuccess = downloadFuture.get(TTS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                    if (!downloadSuccess) {
-                        throw new IOException("下载音频文件失败");
-                    }
-                } catch (TimeoutException e) {
-                    downloadFuture.cancel(true);
-                    logger.warn("语音合成aliyun - 使用{}模型下载音频超时，正在重试 ({}/{})", voiceName, attempts + 1, MAX_RETRY_ATTEMPTS);
-                    attempts++;
-                    if (attempts >= MAX_RETRY_ATTEMPTS) {
-                        logger.error("语音合成aliyun - 使用{}模型多次下载超时，放弃重试", voiceName);
-                        return StrUtil.EMPTY;
-                    }
-                    // 等待一段时间后重试
-                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    continue;
-                }
-
-                return outPath;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.error("重试等待被中断 - 模型: {}", modelDesc, e);
+                return StrUtil.EMPTY;
             } catch (Exception e) {
                 attempts++;
-                if (attempts < MAX_RETRY_ATTEMPTS) {
-                    logger.warn("语音合成aliyun - 使用{}模型失败，正在重试 ({}/{}): {}", voiceName, attempts, MAX_RETRY_ATTEMPTS, e.getMessage());
+                if (attempts < DialogueConstants.MAX_RETRY_ATTEMPTS) {
+                    logger.warn("语音合成aliyun - 使用{}失败，正在重试 ({}/{}): {}", modelDesc, attempts, DialogueConstants.MAX_RETRY_ATTEMPTS, e.getMessage());
                     try {
-                        // 等待一段时间后重试
-                        TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
+                        TimeUnit.MILLISECONDS.sleep(DialogueConstants.RETRY_DELAY_MS);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        logger.error("重试等待被中断", ie);
+                        logger.error("重试等待被中断 - 模型: {}", modelDesc, ie);
                         return StrUtil.EMPTY;
                     }
                 } else {
-                    logger.error("语音合成aliyun - 使用{}模型语音合成失败，已达到最大重试次数：", voiceName, e);
+                    logger.error("语音合成aliyun - 使用{}语音合成失败，已达到最大重试次数：", modelDesc, e);
                     return StrUtil.EMPTY;
                 }
             }
         }
         return StrUtil.EMPTY;
+    }
+
+    /**
+     * 带超时的Future执行，超时时取消任务并返回null
+     */
+    private <T> T getWithTimeout(Future<T> future, String modelDesc) throws Exception {
+        try {
+            return future.get(TTS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            throw new RuntimeException("语音合成aliyun - 使用" + modelDesc + "超时");
+        }
+    }
+
+    /**
+     * 将音频数据保存到文件
+     */
+    private String saveAudioToFile(byte[] data) throws IOException {
+        String outPath = outputPath + getAudioFileName();
+        File file = new File(outPath);
+        try (FileOutputStream fos = new FileOutputStream(file)) {
+            fos.write(data);
+        }
+        return outPath;
+    }
+
+    /**
+     * 内部函数式接口，用于通用重试框架
+     */
+    @FunctionalInterface
+    private interface TtsSynthesizer {
+        /**
+         * 执行一次合成尝试
+         * @return 成功返回文件路径，返回null表示结果无效需重试
+         * @throws Exception 合成失败时抛出异常触发重试
+         */
+        String synthesize() throws Exception;
+    }
+
+    private String ttsQwen(String text) {
+        // 解析音色参数
+        String[] parsed = parseQwenVoiceParam(voiceName);
+        String actualVoiceName = parsed[1];
+        String modelDesc = voiceName + "模型";
+
+        return executeWithRetry(modelDesc, () -> {
+            AudioParameters.Voice voice = VOICE_MAP.get(actualVoiceName);
+            MultiModalConversationParam param = MultiModalConversationParam.builder()
+                    .model("qwen3-tts-flash")
+                    .apiKey(apiKey)
+                    .text(text)
+                    .voice(voice)
+                    .build();
+
+            // 使用共享线程池而不是每次创建新的
+            Future<MultiModalConversationResult> future = sharedExecutor.submit(() -> {
+                MultiModalConversation conv = new MultiModalConversation();
+                return conv.call(param);
+            });
+
+            // 等待结果，设置超时
+            MultiModalConversationResult result = getWithTimeout(future, modelDesc);
+
+            // 检查结果是否有效
+            if (result == null || result.getOutput() == null ||
+                result.getOutput().getAudio() == null ||
+                result.getOutput().getAudio().getUrl() == null) {
+                return null; // 返回null触发重试
+            }
+
+            String audioUrl = result.getOutput().getAudio().getUrl();
+            String outPath = outputPath + getAudioFileName();
+
+            // 下载 WAV（24kHz），重采样到 16kHz 后保存
+            Future<Boolean> downloadFuture = sharedExecutor.submit(() -> {
+                try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                     InputStream in = new URL(audioUrl).openStream()) {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead;
+                    while ((bytesRead = in.read(buffer)) != -1) {
+                        baos.write(buffer, 0, bytesRead);
+                    }
+                    byte[] pcm24k = AudioUtils.wavToPcm(baos.toByteArray());
+                    byte[] pcm16k = AudioUtils.resamplePcm(pcm24k, 24000, 16000);
+                    AudioUtils.saveAsWav(new File(outPath).toPath(), pcm16k);
+                    return true;
+                } catch (Exception e) {
+                    return false;
+                }
+            });
+
+            Boolean downloadSuccess = getWithTimeout(downloadFuture, modelDesc + "下载音频");
+            if (!downloadSuccess) {
+                throw new IOException("下载音频文件失败");
+            }
+
+            return outPath;
+        });
     }
 
     // cosyvoice默认并发只有3个，所以需要增加一个重试机制
     private String ttsCosyvoice(String text) {
-        int attempts = 0;
         // 解析音色参数，获取模型名和音色名
         String[] parsed = parseCosyVoiceParam(voiceName);
         String modelName = parsed[0];
         String actualVoiceName = parsed[1];
-        while (attempts < MAX_RETRY_ATTEMPTS) {
-            try {
-                com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam param =
-                com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam.builder()
-                                .apiKey(apiKey)
-                                .model(modelName)  // 使用解析出的模型名
-                                .voice(actualVoiceName)  // 使用解析出的音色名
-                                .speechRate(speed)
-                                .pitchRate(pitch)
-                                .format(com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat.WAV_16000HZ_MONO_16BIT)
-                                .build();
+        String modelDesc = modelName + "模型(音色:" + actualVoiceName + ")";
 
-                // 使用共享线程池
-                Future<ByteBuffer> future = sharedExecutor.submit(() -> {
-                    com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer synthesizer =
-                        new com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer(param, null);
-                    try {
-                        return synthesizer.call(text);
-                    } finally {
-                        // 主动关闭WebSocket连接，避免僵尸连接占满连接池
-                        try {
-                            synthesizer.getDuplexApi().close(1000, "completed");
-                        } catch (Exception e) {
-                            logger.debug("关闭CosyVoice TTS连接时发生错误", e);
-                        }
-                    }
-                });
+        return executeWithRetry(modelDesc, () -> {
+            com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam param =
+            com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisParam.builder()
+                            .apiKey(apiKey)
+                            .model(modelName)
+                            .voice(actualVoiceName)
+                            .speechRate(speed)
+                            .pitchRate(pitch)
+                            .format(com.alibaba.dashscope.audio.ttsv2.SpeechSynthesisAudioFormat.WAV_16000HZ_MONO_16BIT)
+                            .build();
 
-                // 等待结果，设置超时
-                ByteBuffer audio;
+            // 使用共享线程池
+            Future<ByteBuffer> future = sharedExecutor.submit(() -> {
+                com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer synthesizer =
+                    new com.alibaba.dashscope.audio.ttsv2.SpeechSynthesizer(param, null);
                 try {
-                    audio = future.get(TTS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                } catch (TimeoutException e) {
-                    future.cancel(true);
-                    logger.warn("语音合成aliyun - 使用{}模型超时，正在重试 ({}/{}) - 音色: {}", modelName, attempts + 1, MAX_RETRY_ATTEMPTS, actualVoiceName);
-                    attempts++;
-                    if (attempts >= MAX_RETRY_ATTEMPTS) {
-                        logger.error("语音合成aliyun - 使用{}模型多次超时，放弃重试 - 音色: {}", modelName, actualVoiceName);
-                        return StrUtil.EMPTY;
-                    }
-                    // 等待一段时间后重试
-                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    continue;
-                }
-
-                // 检查返回的ByteBuffer是否为null
-                if (audio == null) {
-                    attempts++;
-                    if (attempts < MAX_RETRY_ATTEMPTS) {
-                        logger.warn("语音合成aliyun - 使用{}模型返回null，正在重试 ({}/{}) - 音色: {}", modelName, attempts, MAX_RETRY_ATTEMPTS, actualVoiceName);
-                        // 等待一段时间后重试
-                        TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                        continue;
-                    } else {
-                        logger.error("语音合成aliyun - 使用{}模型多次返回null，放弃重试 - 音色: {}", modelName, actualVoiceName);
-                        return StrUtil.EMPTY;
-                    }
-                }
-
-                String outPath = outputPath + getAudioFileName();
-                File file = new File(outPath);
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    fos.write(audio.array());
-                } catch (IOException e) {
-                    logger.error("语音合成aliyun -使用{}模型语音合成失败 - 音色: {}", modelName, actualVoiceName, e);
-                    return StrUtil.EMPTY;
-                }
-                return outPath;
-            } catch (Exception e) {
-                attempts++;
-                if (attempts < MAX_RETRY_ATTEMPTS) {
-                    logger.warn("语音合成aliyun - 使用{}模型失败，正在重试 ({}/{}) - 音色: {}: {}", modelName, attempts, MAX_RETRY_ATTEMPTS, actualVoiceName, e.getMessage());
+                    return synthesizer.call(text);
+                } finally {
+                    // 主动关闭WebSocket连接，避免僵尸连接占满连接池
                     try {
-                        // 等待一段时间后重试
-                        TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        logger.error("重试等待被中断 - 模型: {}", modelName, ie);
-                        return StrUtil.EMPTY;
+                        synthesizer.getDuplexApi().close(1000, "completed");
+                    } catch (Exception e) {
+                        logger.debug("关闭CosyVoice TTS连接时发生错误", e);
                     }
-                } else {
-                    logger.error("语音合成aliyun -使用{}模型语音合成失败，已达到最大重试次数 - 音色: {}", modelName, actualVoiceName, e);
-                    return StrUtil.EMPTY;
                 }
+            });
+
+            // 等待结果，设置超时
+            ByteBuffer audio = getWithTimeout(future, modelDesc);
+
+            // 检查返回的ByteBuffer是否为null
+            if (audio == null) {
+                return null; // 返回null触发重试
             }
-        }
-        return StrUtil.EMPTY;
+
+            return saveAudioToFile(audio.array());
+        });
     }
 
-    public String ttsSambert(String text) {
-        int attempts = 0;
-        while (attempts < MAX_RETRY_ATTEMPTS) {
-            try {
-                SpeechSynthesisParam param = SpeechSynthesisParam.builder()
-                        .apiKey(apiKey)
-                        .model(voiceName)
-                        .text(text)
-                        .rate(speed)
-                        .pitch(pitch)
-                        .sampleRate(AudioUtils.SAMPLE_RATE)
-                        .format(SpeechSynthesisAudioFormat.WAV)
-                        .build();
-                
-                // 使用共享线程池
-                Future<ByteBuffer> future = sharedExecutor.submit(() -> {
-                    SpeechSynthesizer synthesizer = new SpeechSynthesizer();
-                    return synthesizer.call(param);
-                });
-                
-                // 等待结果，设置超时
-                ByteBuffer audio;
-                try {
-                    audio = future.get(TTS_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                } catch (TimeoutException e) {
-                    future.cancel(true);
-                    logger.warn("语音合成aliyun - 使用{}模型超时，正在重试 ({}/{})，文本：{}", voiceName, attempts + 1, MAX_RETRY_ATTEMPTS, text);
-                    attempts++;
-                    if (attempts >= MAX_RETRY_ATTEMPTS) {
-                        logger.error("语音合成aliyun - 使用{}模型多次超时，放弃重试，文本：{}", voiceName, text);
-                        return StrUtil.EMPTY;
-                    }
-                    // 等待一段时间后重试
-                    TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    continue;
-                }
-                
-                // 检查返回的ByteBuffer是否为null
-                if (audio == null) {
-                    attempts++;
-                    if (attempts < MAX_RETRY_ATTEMPTS) {
-                        logger.warn("语音合成aliyun - 使用{}模型返回null，正在重试 ({}/{})", voiceName, attempts, MAX_RETRY_ATTEMPTS);
-                        // 等待一段时间后重试
-                        TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                        continue;
-                    } else {
-                        logger.error("语音合成aliyun - 使用{}模型多次返回null，放弃重试", voiceName);
-                        return StrUtil.EMPTY;
-                    }
-                }
-                
-                String outPath = outputPath + getAudioFileName();
-                File file = new File(outPath);
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    fos.write(audio.array());
-                } catch (IOException e) {
-                    logger.error("语音合成aliyun - 使用{}模型失败：", voiceName, e);
-                    return StrUtil.EMPTY;
-                }
-                return outPath;
-            } catch (Exception e) {
-                attempts++;
-                if (attempts < MAX_RETRY_ATTEMPTS) {
-                    logger.warn("语音合成aliyun - 使用{}模型失败，正在重试 ({}/{}): {}", voiceName, attempts, MAX_RETRY_ATTEMPTS, e.getMessage());
-                    try {
-                        // 等待一段时间后重试
-                        TimeUnit.MILLISECONDS.sleep(RETRY_DELAY_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        logger.error("重试等待被中断", ie);
-                        return StrUtil.EMPTY;
-                    }
-                } else {
-                    logger.error("语音合成aliyun - 使用{}模型失败，已达到最大重试次数：", voiceName, e);
-                    return StrUtil.EMPTY;
-                }
+    private String ttsSambert(String text) {
+        String modelDesc = voiceName + "模型";
+
+        return executeWithRetry(modelDesc, () -> {
+            SpeechSynthesisParam param = SpeechSynthesisParam.builder()
+                    .apiKey(apiKey)
+                    .model(voiceName)
+                    .text(text)
+                    .rate(speed)
+                    .pitch(pitch)
+                    .sampleRate(AudioUtils.SAMPLE_RATE)
+                    .format(SpeechSynthesisAudioFormat.WAV)
+                    .build();
+
+            // 使用共享线程池
+            Future<ByteBuffer> future = sharedExecutor.submit(() -> {
+                SpeechSynthesizer synthesizer = new SpeechSynthesizer();
+                return synthesizer.call(param);
+            });
+
+            // 等待结果，设置超时
+            ByteBuffer audio = getWithTimeout(future, modelDesc);
+
+            // 检查返回的ByteBuffer是否为null
+            if (audio == null) {
+                return null; // 返回null触发重试
             }
-        }
-        return StrUtil.EMPTY;
+
+            return saveAudioToFile(audio.array());
+        });
     }
 }

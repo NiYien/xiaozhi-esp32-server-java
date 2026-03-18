@@ -2,9 +2,6 @@ package com.xiaozhi.communication.common;
 
 import com.xiaozhi.base.BaseUnitTest;
 import com.xiaozhi.communication.domain.ListenMessage;
-import com.xiaozhi.dialogue.llm.ChatService;
-import com.xiaozhi.dialogue.llm.factory.ChatModelFactory;
-import com.xiaozhi.dialogue.llm.tool.ToolsGlobalRegistry;
 import com.xiaozhi.dialogue.service.DialogueService;
 import com.xiaozhi.dialogue.service.Player;
 import com.xiaozhi.dialogue.service.VadService;
@@ -39,16 +36,7 @@ class MessageHandlerTest extends BaseUnitTest {
     private SessionManager sessionManager;
 
     @Mock
-    private ChatService chatService;
-
-    @Mock
-    private ChatModelFactory chatModelFactory;
-
-    @Mock
     private SysRoleService roleService;
-
-    @Mock
-    private ToolsGlobalRegistry toolsGlobalRegistry;
 
     @Mock
     private VadService vadService;
@@ -59,6 +47,9 @@ class MessageHandlerTest extends BaseUnitTest {
     @Mock
     private ApplicationContext applicationContext;
 
+    @Mock
+    private BoundDeviceInitializer boundDeviceInitializer;
+
     private MessageHandler messageHandler;
 
     @BeforeEach
@@ -66,13 +57,11 @@ class MessageHandlerTest extends BaseUnitTest {
         messageHandler = new MessageHandler();
         ReflectionTestUtils.setField(messageHandler, "deviceService", deviceService);
         ReflectionTestUtils.setField(messageHandler, "sessionManager", sessionManager);
-        ReflectionTestUtils.setField(messageHandler, "chatService", chatService);
-        ReflectionTestUtils.setField(messageHandler, "chatModelFactory", chatModelFactory);
         ReflectionTestUtils.setField(messageHandler, "roleService", roleService);
-        ReflectionTestUtils.setField(messageHandler, "toolsGlobalRegistry", toolsGlobalRegistry);
         ReflectionTestUtils.setField(messageHandler, "vadService", vadService);
         ReflectionTestUtils.setField(messageHandler, "dialogueService", dialogueService);
         ReflectionTestUtils.setField(messageHandler, "applicationContext", applicationContext);
+        ReflectionTestUtils.setField(messageHandler, "boundDeviceInitializer", boundDeviceInitializer);
         // aecService 默认为 null（@Autowired(required = false)）
     }
 
@@ -92,19 +81,12 @@ class MessageHandlerTest extends BaseUnitTest {
 
         when(deviceService.selectDeviceById(deviceId)).thenReturn(device);
 
-        SysRole role = new SysRole();
-        role.setRoleId(5);
-        role.setRoleName("小智");
-        when(roleService.selectRoleById(5)).thenReturn(role);
-
         messageHandler.afterConnection(chatSession, deviceId);
 
         // 验证会话注册
         verify(sessionManager).registerSession(sessionId, chatSession);
-        verify(sessionManager).registerDevice(eq(sessionId), any(SysDevice.class));
-        // 验证角色加载和 Persona 构建
-        verify(roleService).selectRoleById(5);
-        verify(chatService).buildPersona(chatSession, device, role);
+        // 验证设备初始化委托给 BoundDeviceInitializer
+        verify(boundDeviceInitializer).initializeDevice(eq(chatSession), any(SysDevice.class));
     }
 
     @Test
@@ -125,8 +107,8 @@ class MessageHandlerTest extends BaseUnitTest {
         messageHandler.afterConnection(chatSession, deviceId);
 
         verify(sessionManager).registerSession(sessionId, chatSession);
-        // 不应初始化 Persona
-        verify(chatService, never()).buildPersona(any(), any(), any());
+        // 未绑定设备不应初始化
+        verify(boundDeviceInitializer, never()).initializeDevice(any(), any());
     }
 
     @Test
@@ -143,8 +125,8 @@ class MessageHandlerTest extends BaseUnitTest {
         messageHandler.afterConnection(chatSession, deviceId);
 
         verify(sessionManager).registerSession(sessionId, chatSession);
-        // 不应尝试初始化 Persona（新设备无 roleId）
-        verify(chatService, never()).buildPersona(any(), any(), any());
+        // 新设备不应初始化
+        verify(boundDeviceInitializer, never()).initializeDevice(any(), any());
     }
 
     // ========== handleUnboundDevice ==========
@@ -190,12 +172,7 @@ class MessageHandlerTest extends BaseUnitTest {
         // 会话存在且打开
         ChatSession chatSession = mock(ChatSession.class);
         when(chatSession.isOpen()).thenReturn(true);
-        when(chatSession.getSessionId()).thenReturn(sessionId);
         when(sessionManager.getSession(sessionId)).thenReturn(chatSession);
-
-        SysRole role = new SysRole();
-        role.setRoleId(10);
-        when(roleService.selectRoleById(10)).thenReturn(role);
 
         boolean result = messageHandler.handleUnboundDevice(sessionId, device);
 

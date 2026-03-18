@@ -138,6 +138,56 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 设备未找到异常
+     */
+    @ExceptionHandler(DeviceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ResultMessage handleDeviceNotFoundException(DeviceNotFoundException e, WebRequest request) {
+        logger.warn("设备未找到: {}", e.getMessage());
+        return ResultMessage.error(HttpStatus.NOT_FOUND.value(), e.getMessage());
+    }
+
+    /**
+     * 设备初始化异常
+     */
+    @ExceptionHandler(DeviceInitializationException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ResultMessage handleDeviceInitializationException(DeviceInitializationException e, WebRequest request) {
+        logger.error("设备初始化异常: {}", e.getMessage(), e);
+        return ResultMessage.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "设备初始化失败：" + e.getMessage());
+    }
+
+    /**
+     * 配置错误异常
+     */
+    @ExceptionHandler(ConfigurationException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ResultMessage handleConfigurationException(ConfigurationException e, WebRequest request) {
+        logger.error("配置错误: {}", e.getMessage(), e);
+        return ResultMessage.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "配置错误：" + e.getMessage());
+    }
+
+    /**
+     * 对话相关异常（STT/TTS/LLM）统一处理
+     */
+    @ExceptionHandler(DialogueException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ResultMessage handleDialogueException(DialogueException e, WebRequest request) {
+        logger.error("对话异常: {}", e.getMessage(), e);
+        return ResultMessage.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), "对话处理失败：" + e.getMessage());
+    }
+
+    /**
+     * 小智自定义异常兜底处理
+     */
+    @ExceptionHandler(XiaozhiException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ResultMessage handleXiaozhiException(XiaozhiException e, WebRequest request) {
+        logger.error("系统异常: {}", e.getMessage(), e);
+        return ResultMessage.error(HttpStatus.INTERNAL_SERVER_ERROR.value(), e.getMessage());
+    }
+
+    /**
      * 业务异常处理
      */
     @ExceptionHandler(RuntimeException.class)

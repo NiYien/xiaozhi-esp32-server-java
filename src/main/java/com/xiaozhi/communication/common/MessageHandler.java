@@ -1,12 +1,7 @@
 package com.xiaozhi.communication.common;
 
 import com.xiaozhi.communication.domain.*;
-import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.dialogue.aec.AecService;
-import com.xiaozhi.dialogue.llm.ChatService;
-import com.xiaozhi.dialogue.llm.factory.ChatModelFactory;
-import com.xiaozhi.dialogue.llm.tool.ToolsGlobalRegistry;
-import com.xiaozhi.dialogue.llm.tool.ToolsSessionHolder;
 import com.xiaozhi.dialogue.service.*;
 import com.xiaozhi.dialogue.tts.factory.TtsServiceFactory;
 import com.xiaozhi.entity.SysDevice;
@@ -55,15 +50,6 @@ public class MessageHandler {
     private TtsServiceFactory ttsFactory;
 
     @Resource
-    private ChatService chatService;
-
-    @Resource
-    private ChatModelFactory chatModelFactory;
-
-    @Resource
-    private ToolsGlobalRegistry toolsGlobalRegistry;
-
-    @Resource
     private SysRoleService roleService;
 
     @Resource
@@ -77,6 +63,9 @@ public class MessageHandler {
 
     @Autowired(required = false)
     private AecService aecService;
+
+    @Resource
+    private BoundDeviceInitializer boundDeviceInitializer;
 
     // 用于存储设备ID和验证码生成状态的映射
     private final Map<String, Boolean> captchaGenerationInProgress = new ConcurrentHashMap<>();
@@ -105,44 +94,13 @@ public class MessageHandler {
     }
 
     /**
-     * 初始化已绑定的设备
+     * 初始化已绑定的设备，委托给 BoundDeviceInitializer
      *
      * @param chatSession 聊天会话
      * @param device 设备信息
      */
     private void initializeBoundDevice(ChatSession chatSession, SysDevice device) {
-        String deviceId = device.getDeviceId();
-        String sessionId = chatSession.getSessionId();
-        
-        //这里需要放在虚拟线程外
-        ToolsSessionHolder toolsSessionHolder = new ToolsSessionHolder(chatSession.getSessionId(),
-                device, toolsGlobalRegistry);
-        chatSession.setFunctionSessionHolder(toolsSessionHolder);
-        // 从数据库获取角色描述。device.getRoleId()表示当前设备的当前活跃角色，或者上次退出时的活跃角色。
-        SysRole role = roleService.selectRoleById(device.getRoleId());
-
-        chatService.buildPersona(chatSession, device, role);
-
-        // 连接建立时就初始化 AEC，确保后续任何 TTS 播放（含唤醒响应）的参考帧都不会被丢弃
-        if (aecService != null) aecService.initSession(sessionId);
-
-        //以上同步处理结束后，再启动虚拟线程进行设备初始化，确保chatSession中已设置的sysDevice信息 TODO 性能优化后续再做
-
-        try {
-            // 更新设备状态
-            deviceService.update(new SysDevice()
-                    .setDeviceId(device.getDeviceId())
-                    .setState(chatSession instanceof WebSocketSession ? SysDevice.DEVICE_STATE_ONLINE : SysDevice.DEVICE_STATE_STANDBY));
-
-        } catch (Exception e) {
-            logger.error("设备初始化失败 - DeviceId: " + deviceId, e);
-            try {
-                sessionManager.closeSession(sessionId);
-            } catch (Exception ex) {
-                logger.error("关闭WebSocket连接失败", ex);
-            }
-        }
-
+        boundDeviceInitializer.initializeDevice(chatSession, device);
     }
 
     /**
@@ -275,8 +233,8 @@ public class MessageHandler {
                             // 获取会话对象
                             ChatSession chatSession = sessionManager.getSession(sessionId);
                             if (chatSession != null && chatSession.isOpen()) {
-                                // 初始化设备会话（与afterConnection中的逻辑一致）
-                                initializeBoundDevice(chatSession, boundDevice);
+                                // 虚拟设备创建时已设置正确状态，跳过状态更新避免重复写库
+                                boundDeviceInitializer.initializeDeviceSkipStateUpdate(chatSession, boundDevice);
                                 logger.info("虚拟设备 {} 初始化完成，可以开始对话", deviceId);
                             }
                             

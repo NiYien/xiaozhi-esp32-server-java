@@ -7,10 +7,9 @@ import com.alibaba.nls.client.protocol.tts.SpeechSynthesizer;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerListener;
 import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerResponse;
 import com.xiaozhi.dialogue.token.TokenService;
-import com.xiaozhi.dialogue.tts.TtsService;
+import com.xiaozhi.dialogue.tts.AbstractTtsService;
 import com.xiaozhi.entity.SysConfig;
 
-import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
@@ -24,18 +23,14 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 阿里云NLS标准语音合成服务
  * 使用阿里云智能语音交互SDK实现TTS功能
+ * 继承 AbstractTtsService 复用重试机制，连接池管理保留在子类中
  */
-public class AliyunNlsTtsService implements TtsService {
-    private static final Logger logger = LoggerFactory.getLogger(AliyunNlsTtsService.class);
+public class AliyunNlsTtsService extends AbstractTtsService {
 
     private static final String PROVIDER_NAME = "aliyun-nls";
 
     // 阿里云NLS服务的默认URL
     private static final String NLS_URL = "wss://nls-gateway.aliyuncs.com/ws/v1";
-
-    // 重试机制常量
-    private static final int MAX_RETRY_ATTEMPTS = 3;
-    private static final long RETRY_DELAY_MS = 1000;
 
     /**
      * 全局NlsClient缓存（按configId共享）
@@ -58,21 +53,14 @@ public class AliyunNlsTtsService implements TtsService {
 
     // 阿里云配置
     private final SysConfig config;
-    private final String voiceName;
     private final String outputPath;
-
-    // 语音参数
-    private final Float pitch;
-    private final Float speed;
 
     // Token管理器
     private final TokenService tokenService;
 
     public AliyunNlsTtsService(SysConfig config, String voiceName, Float pitch, Float speed, String outputPath, TokenService tokenService) {
+        super(PROVIDER_NAME, voiceName, speed, pitch);
         this.config = config;
-        this.voiceName = voiceName;
-        this.pitch = pitch;
-        this.speed = speed;
         this.outputPath = outputPath;
         this.tokenService = tokenService;
     }
@@ -125,153 +113,116 @@ public class AliyunNlsTtsService implements TtsService {
         }).client;
     }
 
+    /**
+     * 实际的语音合成逻辑，由基类的重试框架调用
+     */
     @Override
-    public String getProviderName() {
-        return PROVIDER_NAME;
-    }
-
-    @Override
-    public String getVoiceName() {
-        return voiceName;
-    }
-
-    @Override
-    public Float getSpeed() {
-        return speed;
-    }
-
-    @Override
-    public Float getPitch() {
-        return pitch;
-    }
-
-    @Override
-    public String textToSpeech(String text) throws Exception {
+    protected String doTextToSpeech(String text) throws Exception {
         if (text == null || text.isEmpty()) {
             logger.warn("文本内容为空！");
             return null;
         }
 
-        int attempts = 0;
-        while (attempts < MAX_RETRY_ATTEMPTS) {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            CountDownLatch latch = new CountDownLatch(1);
-            NlsClient client = null;
-            SpeechSynthesizer synthesizer = null;
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        CountDownLatch latch = new CountDownLatch(1);
+        NlsClient client = null;
+        SpeechSynthesizer synthesizer = null;
 
-            try {
-                // 获取或复用NlsClient（连接复用）
-                client = getOrCreateClient();
+        try {
+            // 获取或复用NlsClient（连接复用）
+            client = getOrCreateClient();
 
-                synthesizer = new SpeechSynthesizer(client, new SpeechSynthesizerListener() {
-                    @Override
-                    public void onComplete(SpeechSynthesizerResponse response) {
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void onFail(SpeechSynthesizerResponse response) {
-                        logger.error("NLS语音合成失败 - TaskId: {}, Status: {}, StatusText: {}",
-                                response.getTaskId(), response.getStatus(), response.getStatusText());
-                        latch.countDown();
-                    }
-
-                    @Override
-                    public void onMessage(ByteBuffer message) {
-                        byte[] buffer = new byte[message.remaining()];
-                        message.get(buffer);
-                        try {
-                            outputStream.write(buffer);
-                        } catch (IOException e) {
-                            logger.error("写入音频数据失败", e);
-                        }
-                    }
-                });
-
-                // 设置appKey
-                synthesizer.setAppKey(config.getApiKey());
-                // 设置语音输出格式
-                synthesizer.setFormat(OutputFormatEnum.WAV);
-                // 设置采样率
-                synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
-                // 设置语音
-                synthesizer.setVoice(voiceName);
-                // 设置音量
-                synthesizer.setVolume(100);
-
-                // 设置语速和音调（映射：0.5-2.0 → -500~500）
-                int nlsSpeed = (int)Math.round((speed - 1.0f) * 500);
-                int nlsPitch = (int)Math.round((pitch - 1.0f) * 500);
-                nlsSpeed = Math.max(-500, Math.min(500, nlsSpeed));
-                nlsPitch = Math.max(-500, Math.min(500, nlsPitch));
-
-                synthesizer.setSpeechRate(nlsSpeed);
-                synthesizer.setPitchRate(nlsPitch);
-
-                synthesizer.setText(text);
-                synthesizer.start();
-
-                // 设置超时时间，避免无限等待
-                if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
-                    logger.error("NLS语音合成超时");
-                    throw new RuntimeException("语音合成超时");
+            synthesizer = new SpeechSynthesizer(client, new SpeechSynthesizerListener() {
+                @Override
+                public void onComplete(SpeechSynthesizerResponse response) {
+                    latch.countDown();
                 }
 
-                // 检查是否有音频数据生成
-                byte[] audioData = outputStream.toByteArray();
-                if (audioData.length == 0) {
-                    throw new RuntimeException("未生成音频数据");
+                @Override
+                public void onFail(SpeechSynthesizerResponse response) {
+                    logger.error("NLS语音合成失败 - TaskId: {}, Status: {}, StatusText: {}",
+                            response.getTaskId(), response.getStatus(), response.getStatusText());
+                    latch.countDown();
                 }
 
-                String audioFileName = getAudioFileName();
-                String filePath = outputPath + audioFileName;
-
-                File outputDir = new File(outputPath);
-                if (!outputDir.exists()) {
-                    outputDir.mkdirs();
-                }
-
-                try (FileOutputStream fileOutputStream = new FileOutputStream(filePath)) {
-                    fileOutputStream.write(audioData);
-                }
-
-                return filePath;
-
-            } catch (InterruptedException e) {
-                // 线程被中断（用户打断对话），属于正常流程，不清除 NlsClient 缓存
-                Thread.currentThread().interrupt();
-                throw e;
-            } catch (Exception e) {
-                attempts++;
-                // 只关闭 synthesizer，client 由缓存统一管理复用，不在此处 shutdown
-                if (synthesizer != null) {
+                @Override
+                public void onMessage(ByteBuffer message) {
+                    byte[] buffer = new byte[message.remaining()];
+                    message.get(buffer);
                     try {
-                        synthesizer.close();
-                    } catch (Exception ex) {
-                        logger.warn("关闭SpeechSynthesizer失败", ex);
+                        outputStream.write(buffer);
+                    } catch (IOException e) {
+                        logger.error("写入音频数据失败", e);
                     }
                 }
+            });
 
-                if (attempts < MAX_RETRY_ATTEMPTS) {
-                    logger.warn("阿里云NLS语音合成失败，正在重试 ({}/{}): {}", attempts, MAX_RETRY_ATTEMPTS, e.getMessage());
-                    try {
-                        Thread.sleep(RETRY_DELAY_MS);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        logger.error("重试等待被中断", ie);
-                        // NLS 连接异常时清除缓存，下次调用时重建 client
-                        globalClientCache.remove(config.getConfigId());
-                        throw e;
-                    }
-                } else {
-                    logger.error("阿里云NLS语音合成失败，已达到最大重试次数: {}", e.getMessage(), e);
-                    // NLS 连接异常时清除缓存，下次调用时重建 client
-                    globalClientCache.remove(config.getConfigId());
-                    throw e;
+            // 设置appKey
+            synthesizer.setAppKey(config.getApiKey());
+            // 设置语音输出格式
+            synthesizer.setFormat(OutputFormatEnum.WAV);
+            // 设置采样率
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+            // 设置语音
+            synthesizer.setVoice(getVoiceName());
+            // 设置音量
+            synthesizer.setVolume(100);
+
+            // 设置语速和音调（映射：0.5-2.0 → -500~500）
+            int nlsSpeed = (int) Math.round((getSpeed() - 1.0f) * 500);
+            int nlsPitch = (int) Math.round((getPitch() - 1.0f) * 500);
+            nlsSpeed = Math.max(-500, Math.min(500, nlsSpeed));
+            nlsPitch = Math.max(-500, Math.min(500, nlsPitch));
+
+            synthesizer.setSpeechRate(nlsSpeed);
+            synthesizer.setPitchRate(nlsPitch);
+
+            synthesizer.setText(text);
+            synthesizer.start();
+
+            // 设置超时时间，避免无限等待
+            if (!latch.await(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                logger.error("NLS语音合成超时");
+                throw new RuntimeException("语音合成超时");
+            }
+
+            // 检查是否有音频数据生成
+            byte[] audioData = outputStream.toByteArray();
+            if (audioData.length == 0) {
+                throw new RuntimeException("未生成音频数据");
+            }
+
+            String audioFileName = getAudioFileName();
+            String filePath = outputPath + audioFileName;
+
+            File outputDir = new File(outputPath);
+            if (!outputDir.exists()) {
+                outputDir.mkdirs();
+            }
+
+            try (FileOutputStream fileOutputStream = new FileOutputStream(filePath)) {
+                fileOutputStream.write(audioData);
+            }
+
+            return filePath;
+
+        } catch (InterruptedException e) {
+            // 线程被中断（用户打断对话），属于正常流程，不清除 NlsClient 缓存
+            Thread.currentThread().interrupt();
+            throw e;
+        } catch (Exception e) {
+            // 只关闭 synthesizer，client 由缓存统一管理复用，不在此处 shutdown
+            if (synthesizer != null) {
+                try {
+                    synthesizer.close();
+                } catch (Exception ex) {
+                    logger.warn("关闭SpeechSynthesizer失败", ex);
                 }
             }
+            // NLS 连接异常时清除缓存，下次调用时重建 client
+            globalClientCache.remove(config.getConfigId());
+            throw e;
         }
-        throw new Exception("语音合成失败");
     }
 
     /**
@@ -287,10 +238,10 @@ public class AliyunNlsTtsService implements TtsService {
             try {
                 removed.client.shutdown();
             } catch (Exception e) {
-                logger.warn("关闭NlsClient失败", e);
+                // 使用静态方法中无法访问实例logger，使用LoggerFactory获取
+                LoggerFactory.getLogger(AliyunNlsTtsService.class).warn("关闭NlsClient失败", e);
             }
         }
     }
-
 
 }

@@ -157,25 +157,7 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
             toolContextMap = new HashMap<>(toolCallingChatOptions.getToolContext());
 
             List<Message> messageHistory = new ArrayList<>(prompt.copy().getInstructions());
-            
-            // 确保工具调用消息包含正确的元数据
-            if (!CollectionUtils.isEmpty(assistantMessage.getToolCalls())) {
-                Map<String, Object> metadata = new HashMap<>(assistantMessage.getMetadata());
-                String toolName = assistantMessage.getToolCalls().get(0).name();
-                metadata.put("toolName", toolName);
-                AssistantMessage updatedAssistantMessage = AssistantMessage.builder()
-                        .content(assistantMessage.getText())
-                        .properties(metadata)
-                        .toolCalls(assistantMessage.getToolCalls())
-                        .build();
-                messageHistory.add(updatedAssistantMessage);
-            } else {
-                messageHistory.add(AssistantMessage.builder()
-                        .content(assistantMessage.getText())
-                        .properties(assistantMessage.getMetadata())
-                        .toolCalls(assistantMessage.getToolCalls())
-                        .build());
-            }
+            addAssistantMessageWithToolMetadata(messageHistory, assistantMessage);
 
             toolContextMap.put(ToolContext.TOOL_CALL_HISTORY,
                     buildConversationHistoryBeforeToolExecution(prompt, assistantMessage));
@@ -187,26 +169,7 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
     private static List<Message> buildConversationHistoryBeforeToolExecution(Prompt prompt,
                                                                              AssistantMessage assistantMessage) {
         List<Message> messageHistory = new ArrayList<>(prompt.copy().getInstructions());
-        
-        // 确保工具调用消息包含正确的元数据
-        if (!CollectionUtils.isEmpty(assistantMessage.getToolCalls())) {
-            Map<String, Object> metadata = new HashMap<>(assistantMessage.getMetadata());
-            String toolName = assistantMessage.getToolCalls().get(0).name();
-            metadata.put("toolName", toolName);
-            AssistantMessage updatedAssistantMessage = AssistantMessage.builder()
-                    .content(assistantMessage.getText())
-                    .properties(metadata)
-                    .toolCalls(assistantMessage.getToolCalls())
-                    .build();
-            messageHistory.add(updatedAssistantMessage);
-        } else {
-            messageHistory.add(AssistantMessage.builder()
-                    .content(assistantMessage.getText())
-                    .properties(assistantMessage.getMetadata())
-                    .toolCalls(assistantMessage.getToolCalls())
-                    .build());
-        }
-        
+        addAssistantMessageWithToolMetadata(messageHistory, assistantMessage);
         return messageHistory;
     }
 
@@ -390,8 +353,16 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
     private List<Message> buildConversationHistoryAfterToolExecution(List<Message> previousMessages,
                                                                      AssistantMessage assistantMessage, ToolResponseMessage toolResponseMessage) {
         List<Message> messages = new ArrayList<>(previousMessages);
-        
-        // 确保工具调用消息包含正确的元数据
+        addAssistantMessageWithToolMetadata(messages, assistantMessage);
+        messages.add(toolResponseMessage);
+        return messages;
+    }
+
+    /**
+     * 将AssistantMessage添加到消息列表，确保工具调用消息包含正确的元数据。
+     * 如果存在工具调用，会在元数据中添加toolName字段。
+     */
+    private static void addAssistantMessageWithToolMetadata(List<Message> messages, AssistantMessage assistantMessage) {
         if (!CollectionUtils.isEmpty(assistantMessage.getToolCalls())) {
             Map<String, Object> metadata = new HashMap<>(assistantMessage.getMetadata());
             String toolName = assistantMessage.getToolCalls().get(0).name();
@@ -403,11 +374,12 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
                     .build();
             messages.add(updatedAssistantMessage);
         } else {
-            messages.add(assistantMessage);
+            messages.add(AssistantMessage.builder()
+                    .content(assistantMessage.getText())
+                    .properties(assistantMessage.getMetadata())
+                    .toolCalls(assistantMessage.getToolCalls())
+                    .build());
         }
-        
-        messages.add(toolResponseMessage);
-        return messages;
     }
 
     public void setObservationConvention(ToolCallingObservationConvention observationConvention) {
