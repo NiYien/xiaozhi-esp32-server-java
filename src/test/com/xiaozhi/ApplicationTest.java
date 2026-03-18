@@ -1,21 +1,26 @@
 package com.xiaozhi;
 
-import jakarta.annotation.Resource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.web.WebAppConfiguration;
+import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-// Change to NONE to avoid starting a web server
-@SpringBootTest
-@WebAppConfiguration
-public class ApplicationTest {
+/**
+ * 应用基础冒烟测试 - 验证主类和测试框架正常工作
+ */
+class ApplicationTest {
 
-    private static final Logger logger = LoggerFactory.getLogger(ApplicationTest.class);
-
-    @Resource
-    public void main(String[] args) throws Exception {
+    @Test
+    void applicationClassExists() {
+        assertDoesNotThrow(() -> {
+            Class<?> clazz = Class.forName("com.xiaozhi.XiaozhiApplication");
+            assertNotNull(clazz, "XiaozhiApplication 类应存在");
+        });
     }
 
+    @Test
+    void testFrameworkWorks() {
+        // 验证 JUnit 5 测试框架正常运行
+        assertNotNull("测试框架工作正常");
+    }
 }

@@ -129,6 +129,18 @@
                 </exclusion>
             </exclusions>
         </dependency>
+        <!-- H2 内存数据库（测试用） -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Reactor Test（用于 Flux/Mono 测试） -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Swagger - Knife4j -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
@@ -388,7 +400,7 @@
                 <version>3.2.5</version>
                 <configuration>
                     <argLine>-Djava.library.path=${project.basedir}/lib</argLine>
-                    <skipTests>true</skipTests>
+                    <skipTests>false</skipTests>
                 </configuration>
             </plugin>
         </plugins>
