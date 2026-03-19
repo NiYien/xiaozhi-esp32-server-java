@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.FirmwareMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysFirmware">
+        <id property="firmwareId" column="firmwareId" />
+        <result property="firmwareName" column="firmwareName" />
+        <result property="version" column="version" />
+        <result property="chipModelName" column="chipModelName" />
+        <result property="deviceType" column="deviceType" />
+        <result property="url" column="url" />
+        <result property="fileSize" column="fileSize" />
+        <result property="fileHash" column="fileHash" />
+        <result property="description" column="description" />
+        <result property="isDefault" column="isDefault" />
+        <result property="userId" column="userId" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <sql id="Column_List">
+        firmwareId, firmwareName, version, chipModelName, deviceType,
+        url, fileSize, fileHash, description, isDefault, userId,
+        createTime, updateTime
+    </sql>
+
+    <select id="query" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Column_List" />
+        FROM
+            sys_firmware
+        WHERE
+            1 = 1
+            <if test="firmwareName != null and firmwareName != ''">AND firmwareName LIKE CONCAT('%', #{firmwareName}, '%')</if>
+            <if test="chipModelName != null and chipModelName != ''">AND chipModelName = #{chipModelName}</if>
+            <if test="deviceType != null and deviceType != ''">AND deviceType = #{deviceType}</if>
+            <if test="version != null and version != ''">AND version = #{version}</if>
+            <if test="isDefault != null and isDefault != ''">AND isDefault = #{isDefault}</if>
+            <if test="userId != null">AND userId = #{userId}</if>
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Column_List" />
+        FROM
+            sys_firmware
+        WHERE
+            firmwareId = #{firmwareId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="firmwareId" parameterType="com.xiaozhi.entity.SysFirmware">
+        INSERT INTO sys_firmware (firmwareName, version, chipModelName, deviceType,
+            url, fileSize, fileHash, description, isDefault, userId)
+        VALUES (#{firmwareName}, #{version}, #{chipModelName}, #{deviceType},
+            #{url}, #{fileSize}, #{fileHash}, #{description}, #{isDefault}, #{userId})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysFirmware">
+        UPDATE sys_firmware
+        <set>
+            <if test="firmwareName != null and firmwareName != ''">firmwareName = #{firmwareName},</if>
+            <if test="version != null and version != ''">version = #{version},</if>
+            <if test="chipModelName != null">chipModelName = #{chipModelName},</if>
+            <if test="deviceType != null">deviceType = #{deviceType},</if>
+            <if test="url != null and url != ''">url = #{url},</if>
+            <if test="fileSize != null">fileSize = #{fileSize},</if>
+            <if test="fileHash != null">fileHash = #{fileHash},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="isDefault != null and isDefault != ''">isDefault = #{isDefault},</if>
+        </set>
+        WHERE firmwareId = #{firmwareId}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM sys_firmware WHERE firmwareId = #{firmwareId}
+    </delete>
+
+    <select id="findDefaultByChipAndType" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Column_List" />
+        FROM sys_firmware
+        WHERE chipModelName = #{chipModelName}
+          AND deviceType = #{deviceType}
+          AND isDefault = '1'
+        LIMIT 1
+    </select>
+
+    <select id="findDefaultByChip" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Column_List" />
+        FROM sys_firmware
+        WHERE chipModelName = #{chipModelName}
+          AND deviceType IS NULL
+          AND isDefault = '1'
+        LIMIT 1
+    </select>
+
+    <select id="findGlobalDefault" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Column_List" />
+        FROM sys_firmware
+        WHERE chipModelName IS NULL
+          AND deviceType IS NULL
+          AND isDefault = '1'
+        LIMIT 1
+    </select>
+
+    <update id="clearDefaultByChipAndType">
+        UPDATE sys_firmware SET isDefault = '0'
+        WHERE isDefault = '1'
+        <choose>
+            <when test="chipModelName != null and deviceType != null">
+                AND chipModelName = #{chipModelName} AND deviceType = #{deviceType}
+            </when>
+            <when test="chipModelName != null">
+                AND chipModelName = #{chipModelName} AND deviceType IS NULL
+            </when>
+            <otherwise>
+                AND chipModelName IS NULL AND deviceType IS NULL
+            </otherwise>
+        </choose>
+    </update>
+
+</mapper>

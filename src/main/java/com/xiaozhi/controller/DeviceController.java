@@ -12,7 +12,6 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,13 +24,14 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.xiaozhi.common.web.PageFilter;
 import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.communication.common.ChatSession;
 import com.xiaozhi.communication.common.SessionManager;
 import com.xiaozhi.dto.param.*;
+import com.xiaozhi.dto.response.OtaResponseDto;
 import com.xiaozhi.entity.SysDevice;
+import com.xiaozhi.service.OtaService;
 import com.xiaozhi.service.SysDeviceService;
 import com.xiaozhi.utils.CmsUtils;
 import com.xiaozhi.utils.DtoConverter;
@@ -69,6 +69,9 @@ public class DeviceController extends BaseController {
 
     @Resource
     private CmsUtils cmsUtils;
+
+    @Resource
+    private OtaService otaService;
 
     @Value("${xiaozhi.communication.protocol:both}")
     private String communicationProtocol;
@@ -269,128 +272,37 @@ public class DeviceController extends BaseController {
         @RequestBody(required = false) String requestBody,
         HttpServletRequest request) {
         try {
-            // 读取请求体内容
-            SysDevice device = new SysDevice();
+            // 解析OTA请求
+            OtaRequestDto otaRequest = otaService.parseOtaRequest(requestBody, deviceIdAuth);
 
-            // 解析JSON请求体（仅POST请求会有请求体）
-            if (requestBody != null && !requestBody.isEmpty()) {
-                try {
-                    Map<String, Object> jsonData = JsonUtil.OBJECT_MAPPER.readValue(requestBody, new TypeReference<>() {});
+            // 处理OTA请求
+            OtaResponseDto otaResponse = otaService.processOtaRequest(otaRequest, request);
 
-                    // 获取设备ID (MAC地址)
-                    if (deviceIdAuth == null) {
-                        if (jsonData.containsKey("mac_address")) {
-                            deviceIdAuth = (String) jsonData.get("mac_address");
-                        } else if (jsonData.containsKey("mac")) {
-                            deviceIdAuth = (String) jsonData.get("mac");
-                        }
-                    }
-
-                    // 提取芯片型号
-                    if (jsonData.containsKey("chip_model_name")) {
-                        device.setChipModelName((String) jsonData.get("chip_model_name"));
-                    }
-
-                    // 提取应用版本
-                    if (jsonData.containsKey("application") && jsonData.get("application") instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> application = (Map<String, Object>) jsonData.get("application");
-                        if (application.containsKey("version")) {
-                            device.setVersion((String) application.get("version"));
-                        }
-                    }
-
-                    // 提取WiFi名称和设备类型
-                    if (jsonData.containsKey("board") && jsonData.get("board") instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> board = (Map<String, Object>) jsonData.get("board");
-                        if (board.containsKey("ssid")) {
-                            device.setWifiName((String) board.get("ssid"));
-                        }
-                        if (board.containsKey("type")) {
-                            device.setType((String) board.get("type"));
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.debug("JSON解析失败: {}", e.getMessage());
-                }
-            }
-
-            if (deviceIdAuth == null || !cmsUtils.isMacAddressValid(deviceIdAuth)) {
+            // 如果有错误，返回错误响应
+            if (otaResponse.getError() != null) {
                 Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("error", "设备ID不正确");
+                errorResponse.put("error", otaResponse.getError());
                 byte[] responseBytes = JsonUtil.OBJECT_MAPPER.writeValueAsBytes(errorResponse);
                 HttpHeaders headers = new HttpHeaders();
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 headers.setContentLength(responseBytes.length);
-                return new ResponseEntity<>(responseBytes, headers, HttpStatus.BAD_REQUEST);
-            }
 
-            final String deviceId = deviceIdAuth;
-            device.setDeviceId(deviceId);
-            // 设置设备IP地址
-            device.setIp(CmsUtils.getClientIp(request));
-            // 根据设备的IP地址获取地理位置信息
-            var ipInfo = CmsUtils.getIPInfoByAddress(device.getIp());
-            if (ipInfo != null && ipInfo.getLocation() != null && !ipInfo.getLocation().isEmpty()) {
-                device.setLocation(ipInfo.getLocation());
-            }
-
-            // 查询设备是否已绑定
-            List<SysDevice> queryDevice = deviceService.query(device, new PageFilter());
-            Map<String, Object> responseData = new HashMap<>();
-            Map<String, Object> firmwareData = new HashMap<>();
-            Map<String, Object> serverTimeData = new HashMap<>();
-
-            // 设置服务器时间
-            long timestamp = System.currentTimeMillis();
-            serverTimeData.put("timestamp", timestamp);
-            serverTimeData.put("timezone_offset", 480); // 东八区
-
-            // 设置固件信息
-            firmwareData.put("url", cmsUtils.getOtaAddress());
-            firmwareData.put("version", "1.0.0");
-
-            // 检查设备是否已绑定
-            if (ObjectUtils.isEmpty(queryDevice)) {
-                // 设备未绑定，生成验证码
-                try {
-                    SysDevice codeResult = deviceService.generateCode(device);
-                    Map<String, Object> activationData = new HashMap<>();
-                    activationData.put("code", codeResult.getCode());
-                    activationData.put("message", codeResult.getCode());
-                    activationData.put("challenge", deviceId);
-                    responseData.put("activation", activationData);
-                } catch (Exception e) {
-                    logger.error("生成验证码失败", e);
-                    Map<String, Object> errorResponse = new HashMap<>();
-                    errorResponse.put("error", "生成验证码失败");
-                    byte[] responseBytes = JsonUtil.OBJECT_MAPPER.writeValueAsBytes(errorResponse);
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setContentType(MediaType.APPLICATION_JSON);
-                    headers.setContentLength(responseBytes.length);
-                    return new ResponseEntity<>(responseBytes, headers, HttpStatus.INTERNAL_SERVER_ERROR);
-                }
-            } else {
-                // 设备已绑定，设置连接及认证信息
-                // 设置WebSocket连接信息.
-                String websocketToken = "";//deviceService.generateToken(deviceId);
-                Map<String, Object> websocketData = new HashMap<>();
-                websocketData.put("url", cmsUtils.getWebsocketAddress());
-                websocketData.put("token", websocketToken);
-                responseData.put("websocket", websocketData);
-                // 设备已绑定，更新设备状态和信息
-                SysDevice boundDevice = queryDevice.get(0);
-                // 保留原设备名称，更新其他信息
-                device.setDeviceName(boundDevice.getDeviceName());
-
-                // 更新设备信息
-                deviceService.update(device);
+                // 设备ID不正确返回400，其他错误返回500
+                HttpStatus status = "设备ID不正确".equals(otaResponse.getError())
+                        ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR;
+                return new ResponseEntity<>(responseBytes, headers, status);
             }
 
             // 组装响应数据
-            responseData.put("firmware", firmwareData);
-            responseData.put("server_time", serverTimeData);
+            Map<String, Object> responseData = new HashMap<>();
+            responseData.put("firmware", otaResponse.getFirmware());
+            responseData.put("server_time", otaResponse.getServerTime());
+            if (otaResponse.getActivation() != null) {
+                responseData.put("activation", otaResponse.getActivation());
+            }
+            if (otaResponse.getWebsocket() != null) {
+                responseData.put("websocket", otaResponse.getWebsocket());
+            }
 
             // 手动将响应数据转换为字节数组，以便设置确切的Content-Length
             byte[] responseBytes = JsonUtil.OBJECT_MAPPER.writeValueAsBytes(responseData);
@@ -398,7 +310,7 @@ public class DeviceController extends BaseController {
             // 使用ResponseEntity明确设置响应头
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setContentLength(responseBytes.length); // 明确设置Content-Length
+            headers.setContentLength(responseBytes.length);
 
             return new ResponseEntity<>(responseBytes, headers, HttpStatus.OK);
         } catch (Exception e) {

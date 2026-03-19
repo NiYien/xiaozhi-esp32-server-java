@@ -175,6 +175,17 @@ const routes: RouteRecordRaw[] = [
           permission: 'system:config:tts',
         },
       },
+      {
+        path: 'config/firmware',
+        name: 'config-firmware',
+        component: () => import('../views/config/FirmwareView.vue'),
+        meta: {
+          title: 'router.title.firmware',
+          parent: 'router.parent.configManagement',
+          requiresAuth: true,
+          permission: 'system:config:firmware',
+        },
+      },
       // 个人中心
       {
         path: 'setting/account',

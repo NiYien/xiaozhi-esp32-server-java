@@ -2,7 +2,9 @@ package com.xiaozhi.utils;
 
 import com.github.pagehelper.PageInfo;
 import com.xiaozhi.dto.response.*;
+import com.xiaozhi.dto.response.FirmwareDTO;
 import com.xiaozhi.entity.*;
+import com.xiaozhi.entity.SysFirmware;
 import org.springframework.beans.BeanUtils;
 
 import java.util.ArrayList;
@@ -254,6 +256,30 @@ public class DtoConverter {
         }
         return templateList.stream()
             .map(DtoConverter::toTemplateDTO)
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * SysFirmware -> FirmwareDTO
+     */
+    public static FirmwareDTO toFirmwareDTO(SysFirmware firmware) {
+        if (firmware == null) {
+            return null;
+        }
+        FirmwareDTO dto = new FirmwareDTO();
+        BeanUtils.copyProperties(firmware, dto);
+        return dto;
+    }
+
+    /**
+     * List<SysFirmware> -> List<FirmwareDTO>
+     */
+    public static List<FirmwareDTO> toFirmwareDTOList(List<SysFirmware> firmwareList) {
+        if (firmwareList == null || firmwareList.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return firmwareList.stream()
+            .map(DtoConverter::toFirmwareDTO)
             .collect(Collectors.toList());
     }
 

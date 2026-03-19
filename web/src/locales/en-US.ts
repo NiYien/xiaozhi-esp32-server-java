@@ -662,6 +662,7 @@ export default {
       agent: 'Agent Management',
       sttConfig: 'STT Configuration',
       ttsConfig: 'TTS Configuration',
+      firmware: 'Firmware Management',
       memoryManagement: 'Memory Management',
       shortTermMemory: 'Short-term Memory',
       summaryMemory: 'Memory Summary',
@@ -742,6 +743,29 @@ export default {
       offline: 'Offline',
     },
 
+  },
+
+  firmware: {
+    firmwareName: 'Firmware Name',
+    version: 'Version',
+    chipModelName: 'Chip Model',
+    deviceType: 'Device Type',
+    fileSize: 'File Size',
+    description: 'Description',
+    createTime: 'Created At',
+    upload: 'Upload Firmware',
+    uploadSuccess: 'Firmware uploaded successfully',
+    uploadFailed: 'Firmware upload failed',
+    pleaseSelectFile: 'Please select a firmware file',
+    pleaseEnterName: 'Please enter firmware name',
+    pleaseEnterVersion: 'Please enter version',
+    chipModelNamePlaceholder: 'e.g. esp32s3, leave empty for universal',
+    deviceTypePlaceholder: 'e.g. esp-box, leave empty for universal',
+    descriptionPlaceholder: 'Please enter version description',
+    setAsDefault: 'Set as Default',
+    file: 'Firmware File',
+    selectFile: 'Select File',
+    universal: 'Universal',
   },
 
   memory: {

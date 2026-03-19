@@ -59,6 +59,13 @@ export default {
     getSystemGlobalTools: '/mcpTool/getSystemGlobalTools',
     refreshCache: '/mcpTool/refreshCache',
   },
+  firmware: {
+    query: '/firmware',
+    upload: '/firmware/upload',
+    update: '/firmware',
+    delete: '/firmware',
+    setDefault: '/firmware',
+  },
   upload: '/api/file/upload',
   memory: {
     summary: '/memory/summary',

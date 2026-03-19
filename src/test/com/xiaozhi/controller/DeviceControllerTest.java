@@ -7,7 +7,10 @@ import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.service.Persona;
 import com.xiaozhi.dto.param.DeviceAddParam;
 import com.xiaozhi.dto.param.DeviceUpdateParam;
+import com.xiaozhi.dto.param.OtaRequestDto;
+import com.xiaozhi.dto.response.OtaResponseDto;
 import com.xiaozhi.entity.SysDevice;
+import com.xiaozhi.service.OtaService;
 import com.xiaozhi.service.SysDeviceService;
 import com.xiaozhi.utils.CmsUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +25,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -50,6 +55,9 @@ class DeviceControllerTest {
 
     @Mock
     private CmsUtils cmsUtils;
+
+    @Mock
+    private OtaService otaService;
 
     @InjectMocks
     private DeviceController deviceController;
@@ -159,42 +167,62 @@ class DeviceControllerTest {
 
     @Test
     void ota_validRequest_returnsFirmwareInfo() throws Exception {
-        SysDevice boundDevice = new SysDevice();
-        boundDevice.setDeviceId("aa:bb:cc:dd:ee:ff");
-        boundDevice.setDeviceName("小智");
+        // 构建 OtaRequestDto
+        OtaRequestDto otaRequest = new OtaRequestDto();
+        otaRequest.setDeviceId("aa:bb:cc:dd:ee:ff");
+        otaRequest.setChipModelName("ESP32-S3");
+        otaRequest.setVersion("1.0.0");
 
-        when(cmsUtils.isMacAddressValid("aa:bb:cc:dd:ee:ff")).thenReturn(true);
-        when(deviceService.query(any(SysDevice.class), any())).thenReturn(List.of(boundDevice));
-        when(cmsUtils.getOtaAddress()).thenReturn("https://ota.example.com/firmware.bin");
-        when(cmsUtils.getWebsocketAddress()).thenReturn("wss://ws.example.com/ws");
-        when(deviceService.update(any(SysDevice.class))).thenReturn(1);
+        // 构建 OtaResponseDto
+        OtaResponseDto otaResponse = new OtaResponseDto();
+        Map<String, Object> firmwareData = new HashMap<>();
+        firmwareData.put("url", "https://ota.example.com/firmware.bin");
+        firmwareData.put("version", "1.0.0");
+        otaResponse.setFirmware(firmwareData);
 
-        try (MockedStatic<CmsUtils> cmsMock = mockStatic(CmsUtils.class)) {
-            cmsMock.when(() -> CmsUtils.getClientIp(any())).thenReturn("192.168.1.1");
-            cmsMock.when(() -> CmsUtils.getIPInfoByAddress(anyString())).thenReturn(null);
+        Map<String, Object> serverTimeData = new HashMap<>();
+        serverTimeData.put("timestamp", System.currentTimeMillis());
+        serverTimeData.put("timezone_offset", 480);
+        otaResponse.setServerTime(serverTimeData);
 
-            String requestBody = """
-                    {
-                        "chip_model_name": "ESP32-S3",
-                        "application": {"version": "1.0.0"},
-                        "board": {"ssid": "MyWifi", "type": "ESP32-S3"}
-                    }
-                    """;
+        Map<String, Object> websocketData = new HashMap<>();
+        websocketData.put("url", "wss://ws.example.com/ws");
+        websocketData.put("token", "");
+        otaResponse.setWebsocket(websocketData);
 
-            mockMvc.perform(post("/api/device/ota")
-                            .header("Device-Id", "aa:bb:cc:dd:ee:ff")
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content(requestBody))
-                    .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.firmware.url").value("https://ota.example.com/firmware.bin"))
-                    .andExpect(jsonPath("$.server_time.timestamp").exists())
-                    .andExpect(jsonPath("$.websocket.url").value("wss://ws.example.com/ws"));
-        }
+        when(otaService.parseOtaRequest(anyString(), eq("aa:bb:cc:dd:ee:ff"))).thenReturn(otaRequest);
+        when(otaService.processOtaRequest(any(OtaRequestDto.class), any())).thenReturn(otaResponse);
+
+        String requestBody = """
+                {
+                    "chip_model_name": "ESP32-S3",
+                    "application": {"version": "1.0.0"},
+                    "board": {"ssid": "MyWifi", "type": "ESP32-S3"}
+                }
+                """;
+
+        mockMvc.perform(post("/api/device/ota")
+                        .header("Device-Id", "aa:bb:cc:dd:ee:ff")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firmware.url").value("https://ota.example.com/firmware.bin"))
+                .andExpect(jsonPath("$.server_time.timestamp").exists())
+                .andExpect(jsonPath("$.websocket.url").value("wss://ws.example.com/ws"));
     }
 
     @Test
     void ota_invalidMac_returnsBadRequest() throws Exception {
-        when(cmsUtils.isMacAddressValid("invalid-mac")).thenReturn(false);
+        // 构建 OtaRequestDto
+        OtaRequestDto otaRequest = new OtaRequestDto();
+        otaRequest.setDeviceId("invalid-mac");
+
+        // 构建错误响应
+        OtaResponseDto otaResponse = new OtaResponseDto();
+        otaResponse.setError("设备ID不正确");
+
+        when(otaService.parseOtaRequest(anyString(), eq("invalid-mac"))).thenReturn(otaRequest);
+        when(otaService.processOtaRequest(any(OtaRequestDto.class), any())).thenReturn(otaResponse);
 
         mockMvc.perform(post("/api/device/ota")
                         .header("Device-Id", "invalid-mac")
