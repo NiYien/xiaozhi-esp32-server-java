@@ -81,6 +81,8 @@ class ChatServiceTest extends BaseUnitTest {
         ChatSession session = mock(ChatSession.class);
         when(session.getPlayer()).thenReturn(null);
         when(session.getSessionId()).thenReturn("session-1");
+        var mockRegistry = mock(com.xiaozhi.dialogue.service.PersonaRegistry.class);
+        when(session.getPersonaRegistry()).thenReturn(mockRegistry);
 
         SysDevice device = new SysDevice();
         device.setDeviceId("dev-1");
@@ -122,7 +124,8 @@ class ChatServiceTest extends BaseUnitTest {
         assertSame(mockConversation, persona.getConversation());
         // Player 应被创建并设置到 session
         verify(session).setPlayer(any(Player.class));
-        verify(session).setPersona(persona);
+        // Persona 通过 PersonaRegistry 注册
+        verify(mockRegistry).putAndActivate(eq(role.getRoleId()), eq(persona));
     }
 
     @Test
@@ -148,6 +151,8 @@ class ChatServiceTest extends BaseUnitTest {
         ChatSession session = mock(ChatSession.class);
         when(session.getPlayer()).thenReturn(null);
         when(session.getSessionId()).thenReturn("session-2");
+        var mockRegistry = mock(com.xiaozhi.dialogue.service.PersonaRegistry.class);
+        when(session.getPersonaRegistry()).thenReturn(mockRegistry);
 
         SysDevice device = new SysDevice();
         device.setDeviceId("dev-2");

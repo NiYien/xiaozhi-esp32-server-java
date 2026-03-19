@@ -142,9 +142,9 @@ class DeviceControllerTest {
                 .thenReturn(oldDevice)
                 .thenReturn(updatedDevice);
         when(deviceService.update(any(SysDevice.class))).thenReturn(1);
+        var mockRegistry = mock(com.xiaozhi.dialogue.service.PersonaRegistry.class);
         when(sessionManager.getSessionByDeviceId("aa:bb:cc:dd:ee:ff")).thenReturn(mockSession);
-        when(mockSession.getPersona()).thenReturn(mockPersona);
-        when(mockPersona.getConversation()).thenReturn(mockConversation);
+        when(mockSession.getPersonaRegistry()).thenReturn(mockRegistry);
 
         try (MockedStatic<CmsUtils> cmsMock = mockStatic(CmsUtils.class)) {
             cmsMock.when(CmsUtils::getUserId).thenReturn(1);
@@ -158,8 +158,7 @@ class DeviceControllerTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.code").value(200));
 
-            verify(mockConversation).clear();
-            verify(mockSession).setPersona(null);
+            verify(mockRegistry).releaseAll();
         }
     }
 
