@@ -9,6 +9,7 @@ import com.xiaozhi.entity.SysVoiceClone;
 import com.xiaozhi.service.SysConfigService;
 
 import jakarta.annotation.Resource;
+import org.springframework.context.annotation.Lazy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,6 +68,7 @@ public class VoiceCloneManager {
     @Resource
     private SysConfigService configService;
 
+    @Lazy
     @Resource
     private TtsServiceFactory ttsServiceFactory;
 
