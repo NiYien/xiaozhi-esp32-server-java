@@ -355,4 +355,46 @@ public class SessionManager {
     public void updateLastActivity(String sessionId) {
         sessionActivityMonitor.updateLastActivity(sessionId);
     }
+
+    // ---- MQTT 在线状态（委托给 DeviceStateManager） ----
+
+    /**
+     * 设置设备的 MQTT 在线状态
+     *
+     * @param deviceId 设备ID
+     * @param online   是否在线
+     */
+    public void setMqttOnline(String deviceId, boolean online) {
+        deviceStateManager.setMqttOnline(deviceId, online);
+    }
+
+    /**
+     * 查询设备是否通过 MQTT 在线
+     *
+     * @param deviceId 设备ID
+     * @return 是否 MQTT 在线
+     */
+    public boolean isMqttOnline(String deviceId) {
+        return deviceStateManager.isMqttOnline(deviceId);
+    }
+
+    /**
+     * 查询设备是否在线（任一通道在线即视为在线）
+     *
+     * @param deviceId 设备ID
+     * @return 是否在线
+     */
+    public boolean isDeviceOnline(String deviceId) {
+        return deviceStateManager.isDeviceOnline(deviceId);
+    }
+
+    /**
+     * 获取设备的在线通道信息
+     *
+     * @param deviceId 设备ID
+     * @return 在线通道描述
+     */
+    public String getOnlineChannels(String deviceId) {
+        return deviceStateManager.getOnlineChannels(deviceId);
+    }
 }

@@ -11,18 +11,95 @@ import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 设备状态管理器
  * 负责设备配置注册、ListenMode切换、流式识别状态、播放状态查询等
+ * 支持双通道（WebSocket + MQTT）在线状态聚合
  */
 public class DeviceStateManager {
     private static final Logger logger = LoggerFactory.getLogger(DeviceStateManager.class);
 
     private final SessionRegistry sessionRegistry;
 
+    /**
+     * MQTT 在线设备集合，用于双通道状态聚合
+     */
+    private final Set<String> mqttOnlineDevices = ConcurrentHashMap.newKeySet();
+
     public DeviceStateManager(SessionRegistry sessionRegistry) {
         this.sessionRegistry = sessionRegistry;
+    }
+
+    // ---- MQTT 在线状态管理 ----
+
+    /**
+     * 设置设备的 MQTT 在线状态
+     *
+     * @param deviceId 设备ID
+     * @param online   是否在线
+     */
+    public void setMqttOnline(String deviceId, boolean online) {
+        if (online) {
+            mqttOnlineDevices.add(deviceId);
+        } else {
+            mqttOnlineDevices.remove(deviceId);
+        }
+        logger.debug("设备 MQTT 状态更新 - DeviceId: {}, Online: {}", deviceId, online);
+    }
+
+    /**
+     * 查询设备是否通过 MQTT 在线
+     *
+     * @param deviceId 设备ID
+     * @return 是否 MQTT 在线
+     */
+    public boolean isMqttOnline(String deviceId) {
+        return mqttOnlineDevices.contains(deviceId);
+    }
+
+    /**
+     * 查询设备是否通过 WebSocket 在线
+     *
+     * @param deviceId 设备ID
+     * @return 是否 WebSocket 在线
+     */
+    public boolean isWebSocketOnline(String deviceId) {
+        ChatSession session = sessionRegistry.getSessionByDeviceId(deviceId);
+        return session != null && session.isOpen();
+    }
+
+    /**
+     * 查询设备是否在线（任一通道在线即视为在线）
+     * 聚合 WebSocket 和 MQTT 两个通道的状态
+     *
+     * @param deviceId 设备ID
+     * @return 是否在线
+     */
+    public boolean isDeviceOnline(String deviceId) {
+        return isWebSocketOnline(deviceId) || isMqttOnline(deviceId);
+    }
+
+    /**
+     * 获取设备的在线通道信息
+     *
+     * @param deviceId 设备ID
+     * @return 在线通道描述
+     */
+    public String getOnlineChannels(String deviceId) {
+        boolean ws = isWebSocketOnline(deviceId);
+        boolean mqtt = isMqttOnline(deviceId);
+        if (ws && mqtt) {
+            return "WebSocket+MQTT";
+        } else if (ws) {
+            return "WebSocket";
+        } else if (mqtt) {
+            return "MQTT";
+        } else {
+            return "离线";
+        }
     }
 
     /**
