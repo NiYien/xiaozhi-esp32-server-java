@@ -6,6 +6,7 @@ import com.xiaozhi.dialogue.llm.tool.XiaozhiToolMetadata;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.service.SysMessageService;
+import com.xiaozhi.service.SysUserMemoryService;
 import lombok.Builder;
 import lombok.Getter;
 import org.slf4j.Logger;
@@ -104,6 +105,11 @@ public class Persona {
      */
     private SysMessageService messageService;
 
+    /**
+     * 用户长期记忆服务，用于对话完成后异步提取记忆
+     */
+    private SysUserMemoryService userMemoryService;
+
     public Path chat(Flux<byte[]> audioSink){
         // 这个streamRecognition 是阻塞式的，不是异步的。
         final String userText = sttService.streamRecognition(audioSink);
@@ -171,6 +177,8 @@ public class Persona {
             // UserMessage 的时间戳应该在 Dialogue 中注入,与Conversation持有的是同一个UserMessage。
             dialogue.injectInstants();
             messageService.saveAll(dialogue.convert());
+            // 异步提取用户长期记忆
+            triggerMemoryExtraction(userMessage, chatResponse);
             if(disturbed){
                 conversation.add(Conversation.ROLLBACK_MESSAGE);
             }else{
@@ -294,6 +302,33 @@ public class Persona {
             chat("我有事先忙了，再见！",false);
         }
 
+    }
+
+    /**
+     * 异步触发用户长期记忆提取
+     */
+    private void triggerMemoryExtraction(UserMessage userMessage, ChatResponse chatResponse) {
+        if (userMemoryService == null || session == null || conversation == null) {
+            return;
+        }
+        try {
+            Integer userId = conversation.device().getUserId();
+            Integer roleId = conversation.role().getRoleId();
+            if (userId == null || userId <= 0 || roleId == null) {
+                return;
+            }
+            String userText = userMessage.getText();
+            Generation generation = chatResponse.getResult();
+            String assistantText = generation != null && generation.getOutput() != null ?
+                    generation.getOutput().getText() : "";
+            if (userText == null || userText.isBlank()) {
+                return;
+            }
+            String conversationText = "user:" + userText + "\nassistant:" + assistantText;
+            userMemoryService.extractAndSaveAsync(userId, roleId, conversationText);
+        } catch (Exception e) {
+            logger.warn("触发用户记忆提取失败", e);
+        }
     }
 
     private Flux<String> convert(Flux<ChatResponse> chatResponseFlux) {

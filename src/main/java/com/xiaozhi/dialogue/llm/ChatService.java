@@ -16,6 +16,7 @@ import com.xiaozhi.mcp.McpSessionManager;
 import com.xiaozhi.service.SysConfigService;
 import com.xiaozhi.service.SysMessageService;
 import com.xiaozhi.service.SysRoleService;
+import com.xiaozhi.service.SysUserMemoryService;
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +69,9 @@ public class ChatService {
     @Resource
     private GoodbyeMessageSupplier goodbyeMessages;
 
+    @Autowired
+    private SysUserMemoryService userMemoryService;
+
     /**
      * TODO 最终要将ChatService变为Persona工厂类。
      * 目前只有 终端设备建立连接与唤醒时需要 初始化 Persona。
@@ -119,6 +123,7 @@ public class ChatService {
                 .player(session.getPlayer())
                 .messageService(sysMessageService)
                 .goodbyeMessages(goodbyeMessages)
+                .userMemoryService(userMemoryService)
                 .build();
         session.setPersona(persona);
         return persona;

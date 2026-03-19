@@ -1,6 +1,6 @@
 import { http } from './request'
 import api from './api'
-import type { MemoryQueryParams, SummaryMemory, ChatMemory } from '@/types/memory'
+import type { MemoryQueryParams, SummaryMemory, ChatMemory, UserMemory } from '@/types/memory'
 import type { MessageQueryParams } from '@/types/message'
 
 /**
@@ -47,5 +47,30 @@ export function deleteSummaryMemory(roleId: number, deviceId: string, summaryId?
   const url = `${api.memory.summary}/${roleId}/${deviceId}`
   const params = summaryId ? { id: summaryId } : {}
   return http.delete(url, params)
+}
+
+/**
+ * 查询用户长期记忆
+ */
+export function queryUserMemory(params: {
+  category?: string
+  start?: number
+  limit?: number
+}) {
+  return http.getPage<UserMemory>(api.memory.long, params)
+}
+
+/**
+ * 删除用户长期记忆
+ */
+export function deleteUserMemory(memoryId: number) {
+  return http.delete(`${api.memory.long}/${memoryId}`)
+}
+
+/**
+ * 更新用户长期记忆
+ */
+export function updateUserMemory(memoryId: number, content: string, category: string) {
+  return http.put(`${api.memory.long}/${memoryId}`, { content, category })
 }
 

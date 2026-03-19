@@ -749,6 +749,15 @@ export default {
     summary: 'Summary',
     content: 'Content',
     confirmDelete: 'Are you sure to delete this memory? This operation cannot be undone.',
+    longTermMemory: 'Long-term Memory',
+    category: 'Category',
+    categoryPreference: 'Preference',
+    categoryFact: 'Personal Info',
+    categoryHabit: 'Habit',
+    categoryRelationship: 'Relationship',
+    categoryOther: 'Other',
+    editMemory: 'Edit Memory',
+    contentRequired: 'Please enter memory content',
   },
 }
 

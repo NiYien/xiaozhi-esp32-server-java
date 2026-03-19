@@ -5,8 +5,10 @@ import com.xiaozhi.common.web.PageFilter;
 import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.entity.SysSummary;
 import com.xiaozhi.entity.SysUser;
+import com.xiaozhi.entity.SysUserMemory;
 import com.xiaozhi.service.SysDeviceService;
 import com.xiaozhi.service.SysSummaryService;
+import com.xiaozhi.service.SysUserMemoryService;
 import com.xiaozhi.utils.CmsUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -14,6 +16,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -41,6 +44,8 @@ public class MemoryController extends BaseController {
     private SysSummaryService sysSummaryService;
     @Resource
     private SysDeviceService sysDeviceService;
+    @Resource
+    private SysUserMemoryService userMemoryService;
 
     /**
      * 查询指定角色和设备的摘要记忆
@@ -95,6 +100,81 @@ public class MemoryController extends BaseController {
 
             // 批量删除摘要记忆
             int result = sysSummaryService.delete(roleId, deviceId, id);
+            return ResultMessage.success(result);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return ResultMessage.error(e.getMessage());
+        }
+    }
+
+    // ==================== 长期记忆（按用户存储） ====================
+
+    /**
+     * 查询当前用户的长期记忆
+     * GET /api/memory/long
+     */
+    @GetMapping("/long")
+    @ResponseBody
+    @Operation(summary = "查询当前用户的长期记忆", description = "返回当前用户的长期记忆列表，支持按分类筛选")
+    public ResultMessage queryUserMemory(
+            @RequestParam(required = false) String category,
+            HttpServletRequest request) {
+        try {
+            SysUser user = CmsUtils.getUser();
+            if (user == null || user.getUserId() == null) {
+                return ResultMessage.error("用户未登录");
+            }
+            initPageFilter(request);
+            SysUserMemory query = new SysUserMemory();
+            query.setUserId(user.getUserId());
+            if (StringUtils.hasText(category)) {
+                query.setCategory(category);
+            }
+            List<SysUserMemory> memories = userMemoryService.query(query);
+            return ResultMessage.success(new PageInfo<>(memories));
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return ResultMessage.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 删除长期记忆
+     * DELETE /api/memory/long/{memoryId}
+     */
+    @DeleteMapping("/long/{memoryId}")
+    @ResponseBody
+    @Operation(summary = "删除长期记忆", description = "逻辑删除指定的长期记忆")
+    public ResultMessage deleteUserMemory(@PathVariable Long memoryId) {
+        try {
+            SysUser user = CmsUtils.getUser();
+            if (user == null || user.getUserId() == null) {
+                return ResultMessage.error("用户未登录");
+            }
+            int result = userMemoryService.delete(memoryId, user.getUserId());
+            return ResultMessage.success(result);
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return ResultMessage.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 更新长期记忆
+     * PUT /api/memory/long/{memoryId}
+     */
+    @PutMapping("/long/{memoryId}")
+    @ResponseBody
+    @Operation(summary = "更新长期记忆", description = "更新指定长期记忆的内容和分类")
+    public ResultMessage updateUserMemory(@PathVariable Long memoryId,
+                                          @RequestParam String content,
+                                          @RequestParam(required = false, defaultValue = "other") String category) {
+        try {
+            SysUser user = CmsUtils.getUser();
+            if (user == null || user.getUserId() == null) {
+                return ResultMessage.error("用户未登录");
+            }
+            int result = userMemoryService.update(memoryId, user.getUserId(), content, category);
             return ResultMessage.success(result);
         } catch (Exception e) {
             logger.error(e.getMessage(), e);

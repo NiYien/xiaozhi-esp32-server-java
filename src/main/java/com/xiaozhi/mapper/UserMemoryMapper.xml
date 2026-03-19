@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.UserMemoryMapper">
+
+    <resultMap id="UserMemoryResultMap" type="com.xiaozhi.entity.SysUserMemory">
+        <id property="memoryId" column="memoryId" />
+        <result property="userId" column="userId" />
+        <result property="category" column="category" />
+        <result property="content" column="content" />
+        <result property="state" column="state" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <!-- 批量插入记忆 -->
+    <insert id="batchInsert" parameterType="java.util.List">
+        INSERT INTO sys_user_memory (userId, category, content)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.userId}, #{item.category}, #{item.content})
+        </foreach>
+    </insert>
+
+    <!-- 根据用户ID查询有效记忆 -->
+    <select id="findByUserId" resultMap="UserMemoryResultMap">
+        SELECT memoryId, userId, category, content, state, createTime, updateTime
+        FROM sys_user_memory
+        WHERE userId = #{userId} AND state = '1'
+        ORDER BY updateTime DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 根据用户ID和分类查询有效记忆 -->
+    <select id="findByUserIdAndCategory" resultMap="UserMemoryResultMap">
+        SELECT memoryId, userId, category, content, state, createTime, updateTime
+        FROM sys_user_memory
+        WHERE userId = #{userId} AND category = #{category} AND state = '1'
+        ORDER BY updateTime DESC
+    </select>
+
+    <!-- 分页查询用户记忆（管理后台用） -->
+    <select id="query" resultMap="UserMemoryResultMap" parameterType="com.xiaozhi.entity.SysUserMemory">
+        SELECT memoryId, userId, category, content, state, createTime, updateTime
+        FROM sys_user_memory
+        WHERE userId = #{userId} AND state = '1'
+        <if test="category != null and category != ''">
+            AND category = #{category}
+        </if>
+        ORDER BY updateTime DESC
+    </select>
+
+    <!-- 逻辑删除记忆 -->
+    <update id="deleteById">
+        UPDATE sys_user_memory SET state = '0'
+        WHERE memoryId = #{memoryId} AND userId = #{userId}
+    </update>
+
+    <!-- 更新记忆内容 -->
+    <update id="updateContent">
+        UPDATE sys_user_memory
+        SET content = #{content}, category = #{category}
+        WHERE memoryId = #{memoryId} AND userId = #{userId} AND state = '1'
+    </update>
+
+    <!-- 查询用户所有有效记忆的内容 -->
+    <select id="findAllContentByUserId" resultType="java.lang.String">
+        SELECT content FROM sys_user_memory
+        WHERE userId = #{userId} AND state = '1'
+    </select>
+
+</mapper>
