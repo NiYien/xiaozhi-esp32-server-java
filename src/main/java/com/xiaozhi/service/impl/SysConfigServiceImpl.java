@@ -11,6 +11,7 @@ import com.xiaozhi.dialogue.tts.providers.AliyunNlsTtsService;
 import com.xiaozhi.entity.SysConfig;
 import com.xiaozhi.service.SysConfigService;
 import jakarta.annotation.Resource;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
@@ -41,6 +42,7 @@ public class SysConfigServiceImpl extends BaseServiceImpl implements SysConfigSe
     @Resource
     private SttServiceFactory sttServiceFactory;
 
+    @Lazy
     @Resource
     private TtsServiceFactory ttsServiceFactory;
 
