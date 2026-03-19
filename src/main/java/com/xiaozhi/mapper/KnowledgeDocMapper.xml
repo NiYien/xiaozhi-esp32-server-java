@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.KnowledgeDocMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysKnowledgeDoc">
+        <id property="docId" column="docId" />
+        <result property="knowledgeBaseId" column="knowledgeBaseId" />
+        <result property="userId" column="userId" />
+        <result property="docName" column="docName" />
+        <result property="docType" column="docType" />
+        <result property="filePath" column="filePath" />
+        <result property="fileSize" column="fileSize" />
+        <result property="chunkCount" column="chunkCount" />
+        <result property="charCount" column="charCount" />
+        <result property="status" column="status" />
+        <result property="errorMsg" column="errorMsg" />
+        <result property="state" column="state" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        docId, knowledgeBaseId, userId, docName, docType, filePath, fileSize,
+        chunkCount, charCount, status, errorMsg, state, createTime, updateTime
+    </sql>
+
+    <select id="query" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_doc
+        WHERE state = '1'
+        <if test="userId != null">AND userId = #{userId}</if>
+        <if test="knowledgeBaseId != null">AND knowledgeBaseId = #{knowledgeBaseId}</if>
+        <if test="docName != null and docName != ''">AND docName LIKE CONCAT('%', #{docName}, '%')</if>
+        <if test="status != null and status != ''">AND status = #{status}</if>
+        <if test="docType != null and docType != ''">AND docType = #{docType}</if>
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_doc
+        WHERE docId = #{docId}
+    </select>
+
+    <insert id="add" useGeneratedKeys="true" keyProperty="docId" parameterType="com.xiaozhi.entity.SysKnowledgeDoc">
+        INSERT INTO sys_knowledge_doc (knowledgeBaseId, userId, docName, docType, filePath, fileSize, chunkCount, charCount, status, errorMsg, state)
+        VALUES (#{knowledgeBaseId}, #{userId}, #{docName}, #{docType}, #{filePath}, #{fileSize}, #{chunkCount}, #{charCount}, #{status}, #{errorMsg}, #{state})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysKnowledgeDoc">
+        UPDATE sys_knowledge_doc
+        <set>
+            <if test="docName != null and docName != ''">docName = #{docName},</if>
+            <if test="knowledgeBaseId != null">knowledgeBaseId = #{knowledgeBaseId},</if>
+            <if test="chunkCount != null">chunkCount = #{chunkCount},</if>
+            <if test="charCount != null">charCount = #{charCount},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="errorMsg != null">errorMsg = #{errorMsg},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+        </set>
+        WHERE docId = #{docId}
+    </update>
+
+    <update id="deleteById">
+        UPDATE sys_knowledge_doc SET state = '0' WHERE docId = #{docId}
+    </update>
+
+    <select id="selectByKnowledgeBaseId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_doc
+        WHERE knowledgeBaseId = #{knowledgeBaseId} AND state = '1' AND status = 'ready'
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectByKnowledgeBaseIds" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_doc
+        WHERE state = '1' AND status = 'ready'
+        AND knowledgeBaseId IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY createTime DESC
+    </select>
+
+</mapper>

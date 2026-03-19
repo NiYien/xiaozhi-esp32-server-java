@@ -155,6 +155,30 @@ sa-token:
   jwt-secret-key: xiaozhi-esp32-server-java-jwt-secret-key
 
 # ============================================================
+# RAG 知识库配置
+# ============================================================
+xiaozhi:
+  rag:
+    # 是否启用 RAG 知识库功能（需要配置 embedding 模型）
+    enabled: false
+    # Redis VectorStore 索引名称
+    index-name: xiaozhi-knowledge-vectors
+    # Redis VectorStore key 前缀
+    prefix: "knowledge:"
+    # 文档分块大小（字符数，近似800 token，中文1字≈1-2 token）
+    chunk-size: 800
+    # 分块重叠字符数
+    chunk-overlap: 100
+    # 检索返回的最大结果数
+    top-k: 5
+    # 相似度阈值（0-1，越高越严格）
+    similarity-threshold: 0.7
+    # 知识上下文最大字符数（近似2000 token截断阈值）
+    max-context-chars: 2000
+    # 文档上传目录
+    upload-dir: ./uploads/knowledge
+
+# ============================================================
 # 自定义配置
 # ============================================================
 # 是否定时关闭不活跃的会话（秒）

@@ -71,6 +71,17 @@ export default {
     summary: '/memory/summary',
     long: '/memory/long',
   },
+  knowledge: {
+    baseQuery: '/api/knowledge/base',
+    baseAdd: '/api/knowledge/base',
+    baseUpdate: '/api/knowledge/base',
+    baseDelete: '/api/knowledge/base',
+    docQuery: '/api/knowledge/doc',
+    docUpload: '/api/knowledge/doc/upload',
+    docDelete: '/api/knowledge/doc',
+    docReprocess: '/api/knowledge/doc',
+    docStatus: '/api/knowledge/doc',
+  },
 }
 
 

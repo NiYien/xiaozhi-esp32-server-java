@@ -69,6 +69,22 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-zhipuai</artifactId>
         </dependency>
+        <!-- Spring AI Redis VectorStore（RAG 知识库向量检索） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-redis-store</artifactId>
+        </dependency>
+        <!-- Apache Tika（文档内容提取：PDF、DOCX、TXT、MD） -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>2.9.2</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>2.9.2</version>
+        </dependency>
 
         <dependency>
             <groupId>org.projectlombok</groupId>

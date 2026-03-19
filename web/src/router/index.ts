@@ -96,6 +96,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'knowledge',
+        name: 'knowledge',
+        component: () => import('../views/KnowledgeView.vue'),
+        meta: {
+          title: 'router.title.knowledge',
+          icon: 'ReadOutlined',
+          requiresAuth: true,
+          permission: 'system:knowledge',
+        },
+      },
+      {
         path: 'template',
         name: 'template',
         component: () => import('../views/TemplateView.vue'),
