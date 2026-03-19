@@ -56,11 +56,17 @@ public class McpSseConnectionManager {
      * @return McpSseSession 或 null（超出并发限制时）
      */
     public McpSseSession createSession(Integer userId, String baseUrl) {
-        // 检查并发连接限制
+        // 检查并发连接限制（使用 CAS 循环保证原子性）
         AtomicInteger count = userConnectionCount.computeIfAbsent(userId, k -> new AtomicInteger(0));
-        if (count.get() >= MAX_CONNECTIONS_PER_USER) {
-            logger.warn("[{}] 用户 {} 已达最大SSE连接数 {}", TAG, userId, MAX_CONNECTIONS_PER_USER);
-            return null;
+        while (true) {
+            int current = count.get();
+            if (current >= MAX_CONNECTIONS_PER_USER) {
+                logger.warn("[{}] 用户 {} 已达最大SSE连接数 {}", TAG, userId, MAX_CONNECTIONS_PER_USER);
+                return null;
+            }
+            if (count.compareAndSet(current, current + 1)) {
+                break;
+            }
         }
 
         String sessionId = UUID.randomUUID().toString();
@@ -81,7 +87,6 @@ public class McpSseConnectionManager {
         });
 
         sessions.put(sessionId, session);
-        count.incrementAndGet();
 
         logger.info("[{}] 新建SSE连接 - SessionId: {}, UserId: {}, 当前连接数: {}",
                 TAG, sessionId, userId, count.get());

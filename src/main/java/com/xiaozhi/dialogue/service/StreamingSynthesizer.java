@@ -60,6 +60,8 @@ public class StreamingSynthesizer extends Synthesizer {
 
             // 将PCM数据块流包装为Speech流，第一个块附带文本信息
             AtomicBoolean isFirst = new AtomicBoolean(true);
+            // 用 effectively final 变量引用当前句子文本，供 onErrorResume 使用
+            final String sentenceText = text;
             Flux<Speech> speechFlux = pcmStream.map(pcmData -> {
                 // TTFS profiling: 记录首个PCM数据块到达的时刻
                 if (firstTtsRecorded.compareAndSet(false, true)) {
@@ -67,9 +69,13 @@ public class StreamingSynthesizer extends Synthesizer {
                 }
                 // 第一个PCM块附带文本信息
                 if (isFirst.compareAndSet(true, false)) {
-                    return new Speech(pcmData, text);
+                    return new Speech(pcmData, sentenceText);
                 }
                 return new Speech(pcmData);
+            }).onErrorResume(e -> {
+                // 流式TTS合成某句失败时记录警告并跳过，避免错误传播到Player
+                logger.warn("流式TTS合成句子失败，跳过: {}", sentenceText, e);
+                return Flux.empty();
             });
 
             // 交给Player播放（Player内部会排队处理多个Flux）

@@ -57,18 +57,12 @@ public class McpSseController {
      */
     @GetMapping(value = "/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "建立MCP SSE连接", description = "建立SSE事件流，返回消息端点URL")
-    public SseEmitter handleSse(HttpServletRequest request) {
+    public ResponseEntity<?> handleSse(HttpServletRequest request) {
         // 认证：从 Header 或 query parameter 获取 Token
         Integer userId = authenticateRequest(request);
         if (userId == null) {
-            // 认证失败时返回一个立即完成的 emitter
-            SseEmitter emitter = new SseEmitter(0L);
-            try {
-                emitter.completeWithError(new SecurityException("未授权访问"));
-            } catch (Exception e) {
-                // 忽略
-            }
-            return emitter;
+            // 认证失败时返回 401 状态码
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid token");
         }
 
         // 构建基础URL
@@ -77,14 +71,8 @@ public class McpSseController {
         // 创建SSE会话
         McpSseSession session = connectionManager.createSession(userId, baseUrl);
         if (session == null) {
-            // 超出并发连接限制
-            SseEmitter emitter = new SseEmitter(0L);
-            try {
-                emitter.completeWithError(new RuntimeException("连接数超限"));
-            } catch (Exception e) {
-                // 忽略
-            }
-            return emitter;
+            // 超出并发连接限制时返回 429 状态码
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body("Too many connections");
         }
 
         SseEmitter emitter = session.getEmitter();
@@ -101,7 +89,7 @@ public class McpSseController {
             connectionManager.removeSession(session.getSessionId());
         }
 
-        return emitter;
+        return ResponseEntity.ok().header("Content-Type", MediaType.TEXT_EVENT_STREAM_VALUE).body(emitter);
     }
 
     /**

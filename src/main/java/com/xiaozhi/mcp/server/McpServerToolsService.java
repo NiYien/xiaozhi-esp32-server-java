@@ -265,7 +265,7 @@ public class McpServerToolsService {
                         "properties", Map.of(
                                 "deviceId", Map.of("type", "string", "description", "设备ID"),
                                 "property", Map.of("type", "string", "description", "属性名，格式为 iotName.propertyName"),
-                                "value", Map.of("type", "string", "description", "属性值，类型取决于属性定义")),
+                                "value", Map.of("type", List.of("string", "number", "boolean"), "description", "属性值，支持字符串、数字或布尔类型，布尔值用 true/false，数字直接传数值")),
                         "required", List.of("deviceId", "property", "value"))));
 
         // send_message
