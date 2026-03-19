@@ -31,7 +31,6 @@ import jakarta.validation.Valid;
 /**
  * 智能体管理
  * 
- * @author Joey
  */
 @RestController
 @RequestMapping("/api/agent")

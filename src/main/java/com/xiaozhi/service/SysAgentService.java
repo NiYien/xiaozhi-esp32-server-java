@@ -7,7 +7,6 @@ import java.util.List;
 /**
  * 智能体服务接口
  * 
- * @author Joey
  */
 public interface SysAgentService {
 

@@ -8,7 +8,6 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 角色管理 数据层
  *
- * @author Joey
  *
  */
 public interface RoleMapper {

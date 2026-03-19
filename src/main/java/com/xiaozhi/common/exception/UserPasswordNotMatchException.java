@@ -3,7 +3,6 @@ package com.xiaozhi.common.exception;
 /**
  * 密码错误异常
  * 
- * @author Joey
  */
 
 public class UserPasswordNotMatchException extends Exception {

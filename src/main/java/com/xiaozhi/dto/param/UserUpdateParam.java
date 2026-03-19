@@ -9,7 +9,6 @@ import lombok.Data;
 /**
  * 用户信息更新请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "用户信息更新请求参数")

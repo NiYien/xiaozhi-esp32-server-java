@@ -16,7 +16,6 @@ import java.util.List;
  * 布隆过滤器管理器
  * 用于防止不存在的设备ID穿透缓存
  *
- * @author Joey
  */
 @Component
 public class BloomFilterManager {

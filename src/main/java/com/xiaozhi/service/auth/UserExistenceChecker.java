@@ -11,7 +11,6 @@ import org.springframework.util.StringUtils;
  * 用户存在性检查器
  * 统一邮箱、手机号、用户名的重复检查逻辑，消除多处重复的存在性校验代码
  *
- * @author Joey
  */
 @Component
 public class UserExistenceChecker {

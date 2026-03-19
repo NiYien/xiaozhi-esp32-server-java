@@ -16,7 +16,6 @@ import java.util.List;
  * 登录响应构建器
  * 封装角色查询 + 权限树构建 + DTO 转换逻辑，消除多处重复的登录响应构建代码
  *
- * @author Joey
  */
 @Component
 public class LoginResponseBuilder {

@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 /**
  * 固件信息表
  *
- * @author Joey
  */
 @Data
 @Accessors(chain = true)

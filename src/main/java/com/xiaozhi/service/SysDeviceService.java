@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 设备查询/更新
  * 
- * @author Joey
  * 
  */
 public interface SysDeviceService {

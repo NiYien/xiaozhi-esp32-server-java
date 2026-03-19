@@ -8,7 +8,6 @@ import java.util.Map;
 /**
  * OTA响应DTO - 封装OTA响应结构
  *
- * @author Joey
  */
 @Data
 @Schema(description = "OTA响应")

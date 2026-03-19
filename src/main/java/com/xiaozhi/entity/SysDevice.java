@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 /**
  * 设备表
  * 
- * @author Joey
  * 
  */
 @Data

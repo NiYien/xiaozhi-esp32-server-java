@@ -14,7 +14,6 @@ import org.springframework.format.annotation.DateTimeFormat;
  * 用户第三方认证信息表
  * 支持一个用户绑定多个第三方平台(微信/QQ/支付宝等)
  *
- * @author Joey
  */
 @Data
 @Accessors(chain = true)

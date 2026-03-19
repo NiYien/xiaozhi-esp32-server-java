@@ -8,7 +8,6 @@ import lombok.experimental.Accessors;
 /**
  * 提示词模板实体类
  *
- * @author Joey
  *
  */
 @Data

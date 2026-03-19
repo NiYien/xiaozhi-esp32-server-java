@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 /**
  * 认证工具类配置
  *
- * @author Joey
  */
 @Configuration
 public class AuthUtilsConfig {

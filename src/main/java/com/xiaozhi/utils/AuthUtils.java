@@ -8,7 +8,6 @@ import com.xiaozhi.service.SysUserService;
  * 认证工具类
  * 提供统一的用户信息获取方法
  *
- * @author Joey
  */
 public class AuthUtils {
 

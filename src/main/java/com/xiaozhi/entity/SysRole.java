@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 /**
  * 角色配置实体类
  *
- * @author Joey
  * @since 1.0
  */
 @Data

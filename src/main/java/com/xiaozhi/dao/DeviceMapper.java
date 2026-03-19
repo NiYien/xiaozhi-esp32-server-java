@@ -7,7 +7,6 @@ import java.util.List;
 /**
  * 设备信息 数据层
  * 
- * @author Joey
  * 
  */
 public interface DeviceMapper {

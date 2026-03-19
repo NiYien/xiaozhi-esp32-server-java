@@ -8,7 +8,6 @@ import lombok.Data;
 /**
  * 切换全局工具状态请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "切换全局工具状态请求参数")

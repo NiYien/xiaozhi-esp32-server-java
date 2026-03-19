@@ -17,7 +17,6 @@ import java.util.List;
 /**
  * 固件管理服务实现
  *
- * @author Joey
  */
 @Service
 public class SysFirmwareServiceImpl extends BaseServiceImpl implements SysFirmwareService {

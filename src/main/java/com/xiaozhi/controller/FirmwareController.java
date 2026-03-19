@@ -35,7 +35,6 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * 固件管理
  *
- * @author Joey
  */
 @RestController
 @RequestMapping("/api/firmware")

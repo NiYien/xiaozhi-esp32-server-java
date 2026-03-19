@@ -13,7 +13,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 /**
  * 智能体实体类
  * 
- * @author Joey
  */
 @Data
 @Accessors(chain = true)

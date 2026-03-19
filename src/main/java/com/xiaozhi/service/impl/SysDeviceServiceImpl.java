@@ -30,7 +30,6 @@ import java.util.List;
 /**
  * 设备操作
  *
- * @author Joey
  *
  */
 

@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * 测试语音合成请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "测试语音合成请求参数")

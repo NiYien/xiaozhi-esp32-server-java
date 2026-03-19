@@ -15,7 +15,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 /**
  * 用户表
  * 
- * @author Joey
  * 
  */
 @Data

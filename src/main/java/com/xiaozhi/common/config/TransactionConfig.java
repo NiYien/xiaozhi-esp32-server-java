@@ -12,7 +12,6 @@ import javax.sql.DataSource;
 /**
  * 事务管理器配置
  *
- * @author Joey
  */
 @Configuration
 @EnableTransactionManagement

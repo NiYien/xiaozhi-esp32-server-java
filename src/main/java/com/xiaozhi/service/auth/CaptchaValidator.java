@@ -9,7 +9,6 @@ import org.springframework.stereotype.Component;
  * 验证码校验器
  * 统一验证码校验逻辑和错误信息，消除多处重复的验证码检查代码
  *
- * @author Joey
  */
 @Component
 public class CaptchaValidator {

@@ -11,7 +11,6 @@ import java.util.List;
 /**
  * 登录响应DTO
  *
- * @author Joey
  */
 @Data
 @Builder

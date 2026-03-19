@@ -10,7 +10,6 @@ import lombok.experimental.Accessors;
 /**
  * LLM\STT\TTS配置
  * 
- * @author Joey
  * 
  */
 @Data

@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 用户信息响应DTO（不包含敏感信息）
  *
- * @author Joey
  */
 @Data
 @Schema(description = "用户信息")

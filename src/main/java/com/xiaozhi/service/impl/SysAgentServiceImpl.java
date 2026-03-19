@@ -28,7 +28,6 @@ import java.util.stream.Collectors;
 /**
  * 智能体服务实现
  * 
- * @author Joey
  */
 @Service
 public class SysAgentServiceImpl implements SysAgentService {

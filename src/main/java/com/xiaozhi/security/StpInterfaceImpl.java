@@ -17,7 +17,6 @@ import java.util.List;
  * Sa-Token权限接口实现
  * 用于Sa-Token框架获取用户的权限和角色信息
  *
- * @author Joey
  */
 @Component
 public class StpInterfaceImpl implements StpInterface {

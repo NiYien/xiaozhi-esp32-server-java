@@ -5,7 +5,6 @@ import com.xiaozhi.entity.SysUserAuth;
 /**
  * 用户第三方认证服务接口
  *
- * @author Joey
  */
 public interface SysUserAuthService {
 

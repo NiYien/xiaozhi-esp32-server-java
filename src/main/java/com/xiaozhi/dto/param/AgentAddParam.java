@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 添加智能体请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "添加智能体请求参数")

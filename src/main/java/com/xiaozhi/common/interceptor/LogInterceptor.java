@@ -10,7 +10,6 @@ import jakarta.servlet.http.HttpServletResponse;
 /**
  * 系统日志拦截器
  * 
- * @author Joey
  * 
  */
 @Component

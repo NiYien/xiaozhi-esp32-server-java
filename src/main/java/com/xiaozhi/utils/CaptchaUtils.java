@@ -10,7 +10,6 @@ import jakarta.annotation.Resource;
  * 验证码发送工具类
  * 统一管理邮件和短信验证码发送
  * 
- * @author Joey
  */
 @Component
 public class CaptchaUtils {

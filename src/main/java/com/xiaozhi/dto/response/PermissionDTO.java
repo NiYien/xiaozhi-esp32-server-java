@@ -8,7 +8,6 @@ import java.util.List;
 /**
  * 权限信息DTO
  *
- * @author Joey
  */
 @Data
 @Schema(description = "权限信息")

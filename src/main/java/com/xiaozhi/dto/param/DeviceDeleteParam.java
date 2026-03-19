@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * 删除设备请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "删除设备请求参数")

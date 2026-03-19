@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 固件信息响应DTO
  *
- * @author Joey
  */
 @Data
 @Schema(description = "固件信息")

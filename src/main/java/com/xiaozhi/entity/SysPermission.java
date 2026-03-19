@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 权限类
  *
- * @author Joey
  */
 @Data
 @Accessors(chain = true)

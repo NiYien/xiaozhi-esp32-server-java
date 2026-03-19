@@ -6,7 +6,6 @@ import lombok.Data;
 /**
  * 删除消息请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "删除消息请求参数")

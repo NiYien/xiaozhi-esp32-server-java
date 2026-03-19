@@ -20,7 +20,6 @@ import org.apache.commons.io.IOUtils;
 /**
  * 文件上传工具类
  * 
- * @author Joey
  */
 public class FileUploadUtils {
 

@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 提示词模板响应DTO
  *
- * @author Joey
  */
 @Data
 @Schema(description = "提示词模板信息")

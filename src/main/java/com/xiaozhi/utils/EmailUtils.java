@@ -12,7 +12,6 @@ import static io.github.biezhi.ome.OhMyEmail.SMTP_QQ;
 /**
  * 邮件发送工具类
  * 
- * @author Joey
  */
 @Component
 public class EmailUtils {

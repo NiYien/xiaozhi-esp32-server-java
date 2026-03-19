@@ -12,7 +12,6 @@ import org.springframework.web.context.request.RequestContextHolder;
 /**
  * @description: 基础控制器
  *
- * @author Joey
  *
  */
 public class BaseController {

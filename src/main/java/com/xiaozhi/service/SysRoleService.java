@@ -8,7 +8,6 @@ import java.util.List;
 /**
  * 角色查询/更新
  * 
- * @author Joey
  * 
  */
 public interface SysRoleService {

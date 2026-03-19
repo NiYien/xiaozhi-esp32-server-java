@@ -28,7 +28,6 @@ import java.util.List;
 /**
  * 配置管理
  * 
- * @author Joey
  * 
  */
 

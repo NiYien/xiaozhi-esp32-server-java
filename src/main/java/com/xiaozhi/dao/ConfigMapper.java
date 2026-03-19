@@ -7,7 +7,6 @@ import com.xiaozhi.entity.SysConfig;
 /**
  * 模型 数据层
  * 
- * @author Joey
  * 
  */
 public interface ConfigMapper {

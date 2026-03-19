@@ -6,7 +6,6 @@ import lombok.Data;
 /**
  * 更新提示词模板请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "更新提示词模板请求参数")

@@ -8,7 +8,6 @@ import java.util.List;
 /**
  * 固件管理服务
  *
- * @author Joey
  */
 public interface SysFirmwareService {
 

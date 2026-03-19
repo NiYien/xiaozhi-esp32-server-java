@@ -8,7 +8,6 @@ import java.util.List;
 /**
  * 配置
  * 
- * @author Joey
  * 
  */
 public interface SysConfigService {

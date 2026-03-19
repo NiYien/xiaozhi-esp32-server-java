@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 用户角色接口
  * 
- * @author Joey
  */
 public interface SysAuthRoleService {
     /**

@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 固件信息 数据层
  *
- * @author Joey
  */
 public interface FirmwareMapper {
 

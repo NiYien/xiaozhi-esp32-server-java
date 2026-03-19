@@ -16,7 +16,6 @@ import java.util.stream.Collectors;
  * DTO转换工具类
  * 用于Entity和DTO之间的转换
  *
- * @author Joey
  */
 public class DtoConverter {
 

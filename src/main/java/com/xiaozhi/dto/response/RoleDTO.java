@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 角色信息DTO
  *
- * @author Joey
  */
 @Data
 @Schema(description = "角色信息")

@@ -6,7 +6,6 @@ import org.springframework.stereotype.Service;
 /**
  * 密码加密与验证
  *
- * @author Joey
  *
  */
 @Service

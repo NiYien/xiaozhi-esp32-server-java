@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 聊天记录查询/添加
  * 
- * @author Joey
  * 
  */
 public interface SysMessageService {

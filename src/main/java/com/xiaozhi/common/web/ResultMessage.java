@@ -8,7 +8,6 @@ import java.util.HashMap;
 /**
  * 处理结果封装
  *
- * @author Joey
  */
 @Schema(description = "统一响应结果")
 public class ResultMessage extends HashMap<String, Object> {

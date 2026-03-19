@@ -8,7 +8,6 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 用户资料 数据层
  * 
- * @author Joey
  * 
  */
 public interface UserMapper {

@@ -13,7 +13,6 @@ import org.springframework.stereotype.Component;
 /**
  * 短信工具类
  * 
- * @author Joey
  */
 @Component
 public class SmsUtils {

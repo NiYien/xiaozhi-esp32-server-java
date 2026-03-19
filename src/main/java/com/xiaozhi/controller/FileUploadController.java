@@ -23,7 +23,6 @@ import java.util.UUID;
 /**
  * 文件上传控制器
  * 
- * @author Joey
  */
 @RestController
 @RequestMapping("/api/file")

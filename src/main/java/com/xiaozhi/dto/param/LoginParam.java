@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * 用户名密码登录请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "用户名密码登录请求参数")

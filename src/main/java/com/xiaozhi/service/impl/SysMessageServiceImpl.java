@@ -23,7 +23,6 @@ import java.util.List;
 /**
  * 聊天记录
  *
- * @author Joey
  *
  */
 

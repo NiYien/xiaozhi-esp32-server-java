@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * 添加角色请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "添加角色请求参数")

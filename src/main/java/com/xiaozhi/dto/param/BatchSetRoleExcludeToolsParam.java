@@ -9,7 +9,6 @@ import java.util.List;
 /**
  * 批量设置角色排除工具请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "批量设置角色排除工具请求参数")

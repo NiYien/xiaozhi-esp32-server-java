@@ -9,7 +9,6 @@ import lombok.Data;
 /**
  * 发送验证码请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "发送验证码请求参数")

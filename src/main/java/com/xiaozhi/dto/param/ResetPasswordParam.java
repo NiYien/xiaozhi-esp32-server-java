@@ -9,7 +9,6 @@ import lombok.Data;
 /**
  * 重置密码请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "重置密码请求参数")

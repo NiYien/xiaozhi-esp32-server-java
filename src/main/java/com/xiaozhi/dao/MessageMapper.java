@@ -8,7 +8,6 @@ import com.xiaozhi.entity.SysMessage;
 /**
  * 聊天记录 数据层
  * 
- * @author Joey
  * 
  */
 public interface MessageMapper {

@@ -3,7 +3,6 @@ package com.xiaozhi.security;
 /**
  * 密码加密与验证
  * 
- * @author Joey
  * 
  */
 

@@ -10,7 +10,6 @@ import lombok.Data;
 /**
  * 用户注册请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "用户注册请求参数")

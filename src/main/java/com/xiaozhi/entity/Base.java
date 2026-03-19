@@ -14,7 +14,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 /**
  * 基础实体类，所有实体类的父类
  *
- * @author Joey
  * @param <T> 泛型参数，用于支持链式调用
  * 
  */

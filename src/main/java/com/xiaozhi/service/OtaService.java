@@ -8,7 +8,6 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * OTA服务
  *
- * @author Joey
  */
 public interface OtaService {
 

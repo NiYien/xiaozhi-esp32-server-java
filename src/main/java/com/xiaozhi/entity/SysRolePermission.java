@@ -8,7 +8,6 @@ import lombok.experimental.Accessors;
 /**
  * 角色权限配置
  *
- * @author Joey
  *
  */
 @Data

@@ -26,7 +26,6 @@ import java.util.Map;
 /**
  * OTA服务实现
  *
- * @author Joey
  */
 @Service
 public class OtaServiceImpl implements OtaService {

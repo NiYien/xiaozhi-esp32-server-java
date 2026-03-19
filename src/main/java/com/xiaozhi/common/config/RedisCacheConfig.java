@@ -24,7 +24,6 @@ import java.util.concurrent.ThreadLocalRandom;
  * Redis缓存配置
  * 防雪崩由随机TTL负责
  *
- * @author Joey
  */
 @Configuration
 @EnableCaching

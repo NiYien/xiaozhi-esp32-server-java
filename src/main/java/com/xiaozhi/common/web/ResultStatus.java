@@ -3,7 +3,6 @@ package com.xiaozhi.common.web;
 /**
  * 返回状态码
  * 
- * @author Joey
  */
 public class ResultStatus {
     /**

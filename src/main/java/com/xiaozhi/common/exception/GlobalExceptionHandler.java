@@ -22,7 +22,6 @@ import jakarta.servlet.http.HttpServletRequest;
 /**
  * 全局异常处理器
  * 
- * @author Joey
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {

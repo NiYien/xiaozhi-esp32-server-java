@@ -25,7 +25,6 @@ import java.util.List;
 /**
  * 模型配置
  *
- * @author Joey
  *
  */
 

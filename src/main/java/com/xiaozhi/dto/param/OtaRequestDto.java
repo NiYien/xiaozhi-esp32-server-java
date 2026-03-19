@@ -6,7 +6,6 @@ import lombok.Data;
 /**
  * OTA请求DTO - 封装设备上报的OTA请求字段
  *
- * @author Joey
  */
 @Data
 @Schema(description = "OTA请求参数")

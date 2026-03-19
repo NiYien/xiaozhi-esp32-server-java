@@ -7,7 +7,6 @@ import lombok.Data;
 /**
  * 批量更新设备请求参数
  *
- * @author Joey
  */
 @Data
 @Schema(description = "批量更新设备请求参数")

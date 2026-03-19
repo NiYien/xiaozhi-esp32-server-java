@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 /**
  * 用户第三方认证服务实现
  *
- * @author Joey
  */
 @Service
 public class SysUserAuthServiceImpl implements SysUserAuthService {

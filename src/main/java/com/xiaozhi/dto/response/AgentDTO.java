@@ -9,7 +9,6 @@ import java.util.Date;
 /**
  * 智能体信息响应DTO
  *
- * @author Joey
  */
 @Data
 @Schema(description = "智能体信息")

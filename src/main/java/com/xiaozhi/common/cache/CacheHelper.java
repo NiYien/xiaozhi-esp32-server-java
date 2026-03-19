@@ -14,7 +14,6 @@ import java.util.function.Supplier;
  * 缓存助手类
  * 提供带分布式锁的缓存查询,防止缓存击穿
  *
- * @author Joey
  */
 @Component
 public class CacheHelper {

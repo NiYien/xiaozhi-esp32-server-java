@@ -23,7 +23,6 @@ import java.util.List;
  * - Swagger UI: http://localhost:端口/swagger-ui/index.html
  * - OpenAPI JSON: http://localhost:端口/v3/api-docs
  *
- * @author Joey
  */
 @Configuration
 public class SwaggerConfig {
@@ -51,12 +50,9 @@ public class SwaggerConfig {
                                 .name("MIT License")
                                 .url("https://opensource.org/licenses/MIT"))
                         .contact(new Contact()
-                                .name("Joey")
-                                .email("1277676045@qq.com")
-                                .url("https://github.com/joey-zhou/xiaozhi-esp32-server-java")))
+                                .name("Xiaozhi")))
                 .externalDocs(new ExternalDocumentation()
-                        .description("小智ESP32项目文档")
-                        .url("https://github.com/joey-zhou/xiaozhi-esp32-server-java"))
+                        .description("小智ESP32项目文档"))
                 .servers(List.of(
                         new Server().url("http://localhost:8091").description("本地开发环境 - 后端"),
                         new Server().url("http://localhost:8084").description("本地开发环境 - 前端")))

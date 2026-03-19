@@ -6,7 +6,6 @@ import org.apache.ibatis.annotations.Param;
 /**
  * 用户第三方认证信息 数据层
  *
- * @author Joey
  */
 public interface SysUserAuthMapper {
 
