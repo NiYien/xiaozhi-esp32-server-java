@@ -47,22 +47,37 @@ export function setupRouterGuards(router: Router) {
 
     // 2. 已登录处理
     if (to.path === '/login') {
-      // 如果已登录，访问登录页则跳转到首页
-      next({ path: '/dashboard' })
+      // 如果已登录，访问登录页则跳转到对应首页
+      const defaultPath = isAdmin ? '/dashboard' : '/u/dashboard'
+      next({ path: defaultPath })
       NProgress.done()
       return
     }
 
     // 2.1 处理根路径重定向（根据用户类型跳转到不同首页）
     if (to.path === '/') {
-      const defaultPath = isAdmin ? '/dashboard' : '/agents'
+      const defaultPath = isAdmin ? '/dashboard' : '/u/dashboard'
       next({ path: defaultPath })
+      NProgress.done()
+      return
+    }
+
+    // 2.2 普通用户访问管理端路由，重定向到用户端首页
+    if (!isAdmin && !to.path.startsWith('/u/') && !to.meta.isUserRoute && to.meta.requiresAuth) {
+      console.warn(`普通用户尝试访问管理端路由: ${to.path}，重定向到用户端`)
+      next('/u/dashboard')
       NProgress.done()
       return
     }
 
     // 3. 权限检查
     if (to.meta.requiresAuth) {
+      // 用户端路由对所有已登录用户开放，跳过权限检查
+      if (to.meta.isUserRoute) {
+        next()
+        return
+      }
+
       // 检查是否需要管理员权限
       if (to.meta.isAdmin && !isAdmin) {
         console.warn(`用户无权限访问: ${to.path}`)

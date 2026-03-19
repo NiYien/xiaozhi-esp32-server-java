@@ -93,7 +93,7 @@ export function useAuth() {
         // 根据用户类型跳转到不同页面
         // 管理员跳转到 dashboard，普通用户跳转到 agents
         const isAdmin = res.data.user && res.data.user.isAdmin === '1'
-        const defaultRoute = isAdmin ? '/dashboard' : '/agents'
+        const defaultRoute = isAdmin ? '/dashboard' : '/u/dashboard'
         
         // 获取重定向路径
         let redirect = router.currentRoute.value.query.redirect as string || defaultRoute
@@ -233,7 +233,7 @@ export function useAuth() {
         
         // 根据用户类型跳转到不同页面
         const isAdmin = res.data.user && res.data.user.isAdmin === '1'
-        const defaultRoute = isAdmin ? '/dashboard' : '/agents'
+        const defaultRoute = isAdmin ? '/dashboard' : '/u/dashboard'
         
         // 获取重定向路径
         let redirect = router.currentRoute.value.query.redirect as string || defaultRoute
