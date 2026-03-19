@@ -32,7 +32,7 @@ public class McpServerToolsService {
     private SysDeviceService deviceService;
 
     @Resource
-    private SysMessageService messageService;
+    private SysMessageService sysMessageService;
 
     @Resource
     private SessionManager sessionManager;
@@ -226,7 +226,7 @@ public class McpServerToolsService {
         pageFilter.setStart(0);
         pageFilter.setLimit(Math.min(limit, 100));
 
-        List<SysMessage> messages = messageService.query(queryMsg, pageFilter);
+        List<SysMessage> messages = sysMessageService.query(queryMsg, pageFilter);
 
         List<Map<String, Object>> result = new ArrayList<>();
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
