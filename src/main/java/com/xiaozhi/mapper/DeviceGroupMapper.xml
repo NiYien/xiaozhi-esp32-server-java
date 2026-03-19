@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.DeviceGroupMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysDeviceGroup">
+        <id property="groupId" column="groupId" />
+        <result property="groupName" column="groupName" />
+        <result property="description" column="description" />
+        <result property="userId" column="userId" />
+        <result property="state" column="state" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+        <result property="deviceCount" column="deviceCount" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        g.groupId, g.groupName, g.description, g.userId, g.state, g.createTime, g.updateTime
+    </sql>
+
+    <select id="query" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Base_Column_List" />,
+            (SELECT COUNT(*) FROM sys_device_group_member m WHERE m.groupId = g.groupId) AS deviceCount
+        FROM sys_device_group g
+        WHERE 1 = 1
+            <if test="userId != null">AND g.userId = #{userId}</if>
+            <if test="groupName != null and groupName != ''">AND g.groupName LIKE CONCAT('%', #{groupName}, '%')</if>
+            <if test="state != null and state != ''">AND g.state = #{state}</if>
+        ORDER BY g.createTime DESC
+    </select>
+
+    <select id="queryWithDeviceCount" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Base_Column_List" />,
+            (SELECT COUNT(*) FROM sys_device_group_member m WHERE m.groupId = g.groupId) AS deviceCount
+        FROM sys_device_group g
+        WHERE 1 = 1
+            <if test="userId != null">AND g.userId = #{userId}</if>
+            <if test="state != null and state != ''">AND g.state = #{state}</if>
+        ORDER BY g.createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Base_Column_List" />,
+            (SELECT COUNT(*) FROM sys_device_group_member m WHERE m.groupId = g.groupId) AS deviceCount
+        FROM sys_device_group g
+        WHERE g.groupId = #{groupId}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="groupId" parameterType="com.xiaozhi.entity.SysDeviceGroup">
+        INSERT INTO sys_device_group (groupName, description, userId, state)
+        VALUES (#{groupName}, #{description}, #{userId}, #{state})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysDeviceGroup">
+        UPDATE sys_device_group
+        <set>
+            <if test="groupName != null and groupName != ''">groupName = #{groupName},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+        </set>
+        WHERE groupId = #{groupId}
+            <if test="userId != null">AND userId = #{userId}</if>
+    </update>
+
+    <delete id="delete" parameterType="com.xiaozhi.entity.SysDeviceGroup">
+        DELETE FROM sys_device_group
+        WHERE groupId = #{groupId}
+            <if test="userId != null">AND userId = #{userId}</if>
+    </delete>
+
+    <insert id="addMember" parameterType="com.xiaozhi.entity.SysDeviceGroupMember">
+        INSERT IGNORE INTO sys_device_group_member (groupId, deviceId)
+        VALUES (#{groupId}, #{deviceId})
+    </insert>
+
+    <delete id="removeMember" parameterType="com.xiaozhi.entity.SysDeviceGroupMember">
+        DELETE FROM sys_device_group_member
+        WHERE groupId = #{groupId} AND deviceId = #{deviceId}
+    </delete>
+
+    <select id="selectDeviceIdsByGroupId" resultType="java.lang.String">
+        SELECT deviceId FROM sys_device_group_member WHERE groupId = #{groupId}
+    </select>
+
+    <select id="selectGroupsByDeviceId" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Base_Column_List" />
+        FROM sys_device_group g
+        INNER JOIN sys_device_group_member m ON g.groupId = m.groupId
+        WHERE m.deviceId = #{deviceId}
+        ORDER BY g.createTime DESC
+    </select>
+
+    <delete id="removeAllMembers">
+        DELETE FROM sys_device_group_member WHERE groupId = #{groupId}
+    </delete>
+
+</mapper>
