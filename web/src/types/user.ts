@@ -38,7 +38,8 @@ export interface UpdateUserParams {
   name?: string
   email?: string
   tel?: string
-  password?: string // 密码字段
+  oldPassword?: string // 旧密码字段（修改密码时验证）
+  password?: string // 新密码字段
   avatar?: string // 头像字段
 }
 

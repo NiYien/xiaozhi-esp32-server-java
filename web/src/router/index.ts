@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import MainLayout from '../layouts/MainLayout.vue'
+import UserLayout from '../layouts/UserLayout.vue'
 
 // 扩展 RouteMeta 类型
 declare module 'vue-router' {
@@ -9,6 +10,7 @@ declare module 'vue-router' {
     icon?: string
     requiresAuth?: boolean
     isAdmin?: boolean
+    isUserRoute?: boolean // 用户端路由标记
     parent?: string
     hideInMenu?: boolean
     permission?: string // 单个权限
@@ -210,6 +212,55 @@ const routes: RouteRecordRaw[] = [
       //     permission: 'system:setting',
       //   },
       // },
+    ],
+  },
+
+  // 用户端路由
+  {
+    path: '/u',
+    component: UserLayout,
+    redirect: '/u/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'user-dashboard',
+        component: () => import('../views/user/UserDashboard.vue'),
+        meta: {
+          title: '首页',
+          requiresAuth: true,
+          isUserRoute: true,
+        },
+      },
+      {
+        path: 'devices',
+        name: 'user-devices',
+        component: () => import('../views/user/UserDevices.vue'),
+        meta: {
+          title: '我的设备',
+          requiresAuth: true,
+          isUserRoute: true,
+        },
+      },
+      {
+        path: 'chat/:deviceId',
+        name: 'user-chat',
+        component: () => import('../views/user/UserChat.vue'),
+        meta: {
+          title: '对话历史',
+          requiresAuth: true,
+          isUserRoute: true,
+        },
+      },
+      {
+        path: 'settings',
+        name: 'user-settings',
+        component: () => import('../views/user/UserSettings.vue'),
+        meta: {
+          title: '个人设置',
+          requiresAuth: true,
+          isUserRoute: true,
+        },
+      },
     ],
   },
 
