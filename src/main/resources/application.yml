@@ -182,6 +182,7 @@ xiaozhi:
     automatic-reconnect: true
     max-reconnect-delay: 30
     clean-start: true
+    qos: 1
 
 # ============================================================
 # 自定义配置

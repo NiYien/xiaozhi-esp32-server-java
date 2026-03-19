@@ -206,7 +206,7 @@ public class PahoMqttService implements MqttService, MqttCallback {
     private void resubscribeAll() {
         for (Map.Entry<String, MqttMessageListener> entry : listenerMap.entrySet()) {
             try {
-                MqttSubscription subscription = new MqttSubscription(entry.getKey(), 1);
+                MqttSubscription subscription = new MqttSubscription(entry.getKey(), mqttProperties.getQos());
                 mqttClient.subscribe(new MqttSubscription[]{subscription}, null, null,
                         new IMqttMessageListener[]{(t, m) -> {}}, new org.eclipse.paho.mqttv5.common.packet.MqttProperties());
                 logger.info("MQTT 重连后重新订阅 - TopicFilter: {}", entry.getKey());

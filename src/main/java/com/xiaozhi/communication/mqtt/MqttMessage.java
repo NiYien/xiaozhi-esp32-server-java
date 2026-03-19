@@ -18,9 +18,9 @@ public class MqttMessage {
     private String type;
 
     /**
-     * 消息时间戳（ISO 8601 格式）
+     * 消息时间戳（毫秒级 Unix 时间戳）
      */
-    private String timestamp;
+    private long timestamp;
 
     /**
      * 消息负载（JSON 对象）

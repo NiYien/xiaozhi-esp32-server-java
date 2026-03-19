@@ -57,13 +57,14 @@ public class PersonaRegistry {
             return persona;
         }
 
-        // 超出容量限制，淘汰最久未使用的非活跃 Persona
-        evictIfNeeded();
-
         // 创建新的 Persona
         persona = factory.get();
-        personas.put(roleId, persona);
-        logger.info("创建新的 Persona 并缓存，roleId: {}，当前缓存数: {}", roleId, personas.size());
+        if (persona != null) {
+            // 超出容量限制，淘汰最久未使用的非活跃 Persona
+            evictIfNeeded();
+            personas.put(roleId, persona);
+            logger.info("创建新的 Persona 并缓存，roleId: {}，当前缓存数: {}", roleId, personas.size());
+        }
         return persona;
     }
 
@@ -87,7 +88,7 @@ public class PersonaRegistry {
      *
      * @return 当前活跃的 Persona，可能为 null
      */
-    public Persona getActive() {
+    public synchronized Persona getActive() {
         return activePersona;
     }
 

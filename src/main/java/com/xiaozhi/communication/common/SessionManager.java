@@ -379,6 +379,16 @@ public class SessionManager {
     }
 
     /**
+     * 获取设备三态状态（online / standby / offline）
+     *
+     * @param deviceId 设备ID
+     * @return 设备状态字符串
+     */
+    public String getDeviceState(String deviceId) {
+        return deviceStateManager.getDeviceState(deviceId);
+    }
+
+    /**
      * 查询设备是否在线（任一通道在线即视为在线）
      *
      * @param deviceId 设备ID

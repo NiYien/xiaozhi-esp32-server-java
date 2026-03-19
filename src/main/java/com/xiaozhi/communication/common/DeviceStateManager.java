@@ -83,6 +83,27 @@ public class DeviceStateManager {
     }
 
     /**
+     * 获取设备三态状态
+     * online: WebSocket 已连接，设备正在活跃通话
+     * standby: 仅 MQTT 在线，设备待机可唤醒
+     * offline: 所有通道均离线
+     *
+     * @param deviceId 设备ID
+     * @return 设备状态字符串（online / standby / offline）
+     */
+    public String getDeviceState(String deviceId) {
+        boolean wsOnline = isWebSocketOnline(deviceId);
+        boolean mqttOnline = isMqttOnline(deviceId);
+        if (wsOnline) {
+            return "online";
+        }
+        if (mqttOnline) {
+            return "standby";
+        }
+        return "offline";
+    }
+
+    /**
      * 获取设备的在线通道信息
      *
      * @param deviceId 设备ID

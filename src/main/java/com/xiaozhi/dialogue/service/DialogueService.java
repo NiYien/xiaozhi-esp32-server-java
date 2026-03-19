@@ -337,10 +337,9 @@ public class DialogueService{
      */
     public void handleWakeWord(ChatSession session, String text) {
         logger.info("检测到唤醒词: {}", text);
+        // 设置唤醒响应状态,在响应期间忽略VAD检测
+        session.setInWakeupResponse(true);
         try {
-            // 设置唤醒响应状态,在响应期间忽略VAD检测
-            session.setInWakeupResponse(true);
-
             SysDevice device = session.getSysDevice();
             if (device == null) {
                 return;
@@ -386,6 +385,9 @@ public class DialogueService{
             persona.wakeUp(text);
         } catch (Exception e) {
             logger.error("处理唤醒词失败: {}", e.getMessage(), e);
+        } finally {
+            // 确保无论正常返回还是异常，都重置唤醒响应状态
+            session.setInWakeupResponse(false);
         }
     }
 

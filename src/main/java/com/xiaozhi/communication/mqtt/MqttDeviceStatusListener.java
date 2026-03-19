@@ -7,7 +7,13 @@ import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * MQTT 设备状态监听器
@@ -26,6 +32,11 @@ public class MqttDeviceStatusListener {
 
     @Resource
     private SessionManager sessionManager;
+
+    /**
+     * 设备最后心跳时间映射，用于超时检测
+     */
+    private final ConcurrentHashMap<String, Instant> lastHeartbeatTime = new ConcurrentHashMap<>();
 
     /**
      * 初始化时订阅所有设备的状态 Topic
@@ -64,17 +75,41 @@ public class MqttDeviceStatusListener {
             String type = message.getType();
             if ("online".equals(type)) {
                 sessionManager.setMqttOnline(deviceId, true);
+                lastHeartbeatTime.put(deviceId, Instant.now());
                 logger.info("设备 MQTT 上线: {}", deviceId);
             } else if ("offline".equals(type)) {
                 sessionManager.setMqttOnline(deviceId, false);
+                lastHeartbeatTime.remove(deviceId);
                 logger.info("设备 MQTT 离线: {}", deviceId);
             } else if ("heartbeat".equals(type)) {
-                // 心跳消息，刷新 MQTT 在线状态
+                // 心跳消息，刷新 MQTT 在线状态和最后心跳时间
                 sessionManager.setMqttOnline(deviceId, true);
+                lastHeartbeatTime.put(deviceId, Instant.now());
                 logger.debug("设备 MQTT 心跳: {}", deviceId);
             }
         } catch (Exception e) {
             logger.error("处理设备状态消息失败 - Topic: {}", topic, e);
+        }
+    }
+
+    /**
+     * 定时扫描心跳超时的设备
+     * 超过 3 倍心跳间隔未收到心跳的设备标记为 MQTT 离线
+     */
+    @Scheduled(fixedRate = 60000)
+    public void checkHeartbeatTimeout() {
+        long timeoutSeconds = (long) mqttProperties.getKeepAliveInterval() * 3;
+        Instant threshold = Instant.now().minusSeconds(timeoutSeconds);
+
+        Iterator<Map.Entry<String, Instant>> iterator = lastHeartbeatTime.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<String, Instant> entry = iterator.next();
+            if (entry.getValue().isBefore(threshold)) {
+                String deviceId = entry.getKey();
+                sessionManager.setMqttOnline(deviceId, false);
+                iterator.remove();
+                logger.warn("设备 MQTT 心跳超时，标记为离线 - DeviceId: {}, 上次心跳: {}", deviceId, entry.getValue());
+            }
         }
     }
 }

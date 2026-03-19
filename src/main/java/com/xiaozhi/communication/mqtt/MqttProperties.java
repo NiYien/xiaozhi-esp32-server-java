@@ -65,4 +65,9 @@ public class MqttProperties {
      * 是否使用 Clean Start
      */
     private boolean cleanStart = true;
+
+    /**
+     * 默认消息服务质量等级 (0, 1, 2)
+     */
+    private int qos = 1;
 }
