@@ -97,4 +97,14 @@
         DELETE FROM sys_device_group_member WHERE groupId = #{groupId}
     </delete>
 
+    <!-- 根据用户ID和分组名称精确查询分组 -->
+    <select id="selectByUserIdAndName" resultMap="BaseResultMap">
+        SELECT
+            <include refid="Base_Column_List" />,
+            (SELECT COUNT(*) FROM sys_device_group_member m WHERE m.groupId = g.groupId) AS deviceCount
+        FROM sys_device_group g
+        WHERE g.userId = #{userId} AND g.groupName = #{groupName} AND g.state = '1'
+        LIMIT 1
+    </select>
+
 </mapper>

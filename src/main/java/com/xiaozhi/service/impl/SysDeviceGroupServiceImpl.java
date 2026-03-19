@@ -86,4 +86,9 @@ public class SysDeviceGroupServiceImpl extends BaseServiceImpl implements SysDev
         query.setState("1");
         return deviceGroupMapper.queryWithDeviceCount(query);
     }
+
+    @Override
+    public SysDeviceGroup selectByUserIdAndName(int userId, String groupName) {
+        return deviceGroupMapper.selectByUserIdAndName(userId, groupName);
+    }
 }

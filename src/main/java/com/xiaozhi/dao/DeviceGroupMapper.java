@@ -2,6 +2,7 @@ package com.xiaozhi.dao;
 
 import com.xiaozhi.entity.SysDeviceGroup;
 import com.xiaozhi.entity.SysDeviceGroupMember;
+import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
 
@@ -64,4 +65,13 @@ public interface DeviceGroupMapper {
      * 查询用户的分组列表（含设备数量）
      */
     List<SysDeviceGroup> queryWithDeviceCount(SysDeviceGroup group);
+
+    /**
+     * 根据用户ID和分组名称精确查询分组
+     *
+     * @param userId    用户ID
+     * @param groupName 分组名称
+     * @return 匹配的分组，未找到返回 null
+     */
+    SysDeviceGroup selectByUserIdAndName(@Param("userId") int userId, @Param("groupName") String groupName);
 }

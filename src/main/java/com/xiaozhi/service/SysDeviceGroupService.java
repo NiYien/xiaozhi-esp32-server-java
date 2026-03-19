@@ -60,4 +60,13 @@ public interface SysDeviceGroupService {
      * 查询用户的分组列表（含设备数量，用于Function Call）
      */
     List<SysDeviceGroup> queryByUserId(Integer userId);
+
+    /**
+     * 根据用户ID和分组名称查询分组
+     *
+     * @param userId    用户ID
+     * @param groupName 分组名称
+     * @return 匹配的分组，未找到返回 null
+     */
+    SysDeviceGroup selectByUserIdAndName(int userId, String groupName);
 }

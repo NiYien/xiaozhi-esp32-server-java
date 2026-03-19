@@ -6,6 +6,7 @@ import com.xiaozhi.dialogue.service.*;
 import com.xiaozhi.dialogue.tts.TtsService;
 import com.xiaozhi.dialogue.tts.factory.TtsServiceFactory;
 import com.xiaozhi.entity.SysConfig;
+import com.xiaozhi.entity.SysDeviceGroup;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.utils.AudioUtils;
 import jakarta.annotation.Resource;
@@ -50,12 +51,20 @@ public class BroadcastService {
      * 向设备组广播文本消息
      * TTS合成一次，PCM数据共享到多个在线设备的Player
      *
-     * @param groupId 分组ID
-     * @param text    要广播的文本
+     * @param groupId       分组ID
+     * @param text          要广播的文本
      * @param sourceSession 发起广播的会话（用于获取TTS配置）
+     * @param userId        当前用户ID，用于权限校验
      * @return 广播结果
      */
-    public BroadcastResult broadcastMessage(Integer groupId, String text, ChatSession sourceSession) {
+    public BroadcastResult broadcastMessage(Integer groupId, String text, ChatSession sourceSession, Integer userId) {
+        // 校验分组是否属于当前用户
+        if (userId != null) {
+            SysDeviceGroup group = deviceGroupService.selectById(groupId);
+            if (group == null || !userId.equals(group.getUserId())) {
+                return new BroadcastResult(0, 0, 0, "设备组不存在");
+            }
+        }
         // 获取分组内所有设备ID
         List<String> deviceIds = deviceGroupService.getDeviceIds(groupId);
         if (deviceIds == null || deviceIds.isEmpty()) {
@@ -128,12 +137,20 @@ public class BroadcastService {
     /**
      * 向设备组广播音频文件
      *
-     * @param groupId   分组ID
-     * @param audioPath 音频文件路径
+     * @param groupId       分组ID
+     * @param audioPath     音频文件路径
      * @param sourceSession 发起广播的会话
+     * @param userId        当前用户ID，用于权限校验
      * @return 广播结果
      */
-    public BroadcastResult broadcastAudio(Integer groupId, String audioPath, ChatSession sourceSession) {
+    public BroadcastResult broadcastAudio(Integer groupId, String audioPath, ChatSession sourceSession, Integer userId) {
+        // 校验分组是否属于当前用户
+        if (userId != null) {
+            SysDeviceGroup group = deviceGroupService.selectById(groupId);
+            if (group == null || !userId.equals(group.getUserId())) {
+                return new BroadcastResult(0, 0, 0, "设备组不存在");
+            }
+        }
         // 获取分组内所有设备ID
         List<String> deviceIds = deviceGroupService.getDeviceIds(groupId);
         if (deviceIds == null || deviceIds.isEmpty()) {

@@ -53,6 +53,11 @@ public class ReminderTools implements ToolsGlobalRegistry.GlobalFunction {
                     ChatSession session = (ChatSession) toolContext.getContext().get(ChatService.TOOL_CONTEXT_SESSION_KEY);
                     SysDevice device = session.getSysDevice();
 
+                    // 校验 userId 是否存在，避免自动拆箱 NPE
+                    if (device.getUserId() == null) {
+                        return "无法获取用户信息，请先绑定设备";
+                    }
+
                     String message = params.get("message");
                     String triggerTimeStr = params.get("triggerTime");
                     String repeatType = params.get("repeatType");
@@ -133,6 +138,11 @@ public class ReminderTools implements ToolsGlobalRegistry.GlobalFunction {
                         ChatSession session = (ChatSession) toolContext.getContext().get(ChatService.TOOL_CONTEXT_SESSION_KEY);
                         SysDevice device = session.getSysDevice();
 
+                        // 校验 userId 是否存在，避免自动拆箱 NPE
+                        if (device.getUserId() == null) {
+                            return "无法获取用户信息，请先绑定设备";
+                        }
+
                         List<SysReminder> reminders = reminderService.listReminders(
                                 device.getUserId(), device.getDeviceId());
 
@@ -202,6 +212,11 @@ public class ReminderTools implements ToolsGlobalRegistry.GlobalFunction {
                     .builder("cancel_reminder", (Map<String, String> params, ToolContext toolContext) -> {
                         ChatSession session = (ChatSession) toolContext.getContext().get(ChatService.TOOL_CONTEXT_SESSION_KEY);
                         SysDevice device = session.getSysDevice();
+
+                        // 校验 userId 是否存在，避免自动拆箱 NPE
+                        if (device.getUserId() == null) {
+                            return "无法获取用户信息，请先绑定设备";
+                        }
 
                         String message = params.get("message");
                         if (message == null || message.isEmpty()) {

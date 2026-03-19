@@ -21,7 +21,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 广播音频文件到设备组的Function Call工具
+ * 广播语音到设备组的Function Call工具
+ * 接收文本参数，内部通过TTS合成后广播到组内所有在线设备
  */
 @Component
 public class BroadcastAudioFunction implements ToolsGlobalRegistry.GlobalFunction {
@@ -46,51 +47,57 @@ public class BroadcastAudioFunction implements ToolsGlobalRegistry.GlobalFunctio
         }
 
         String groupList = groups.stream()
-                .map(g -> g.getGroupName() + "(ID:" + g.getGroupId() + ")")
+                .map(g -> g.getGroupName() + "(设备数:" + g.getDeviceCount() + ")")
                 .collect(Collectors.joining(", "));
 
         return FunctionToolCallback
                 .builder("broadcast_audio", (Map<String, Object> params, ToolContext toolContext) -> {
                     ChatSession session = (ChatSession) toolContext.getContext().get(ChatService.TOOL_CONTEXT_SESSION_KEY);
                     try {
-                        Object groupIdObj = params.get("groupId");
-                        String audioPath = (String) params.get("audioPath");
+                        String groupName = (String) params.get("groupName");
+                        String text = (String) params.get("text");
 
-                        if (groupIdObj == null || audioPath == null || audioPath.isBlank()) {
-                            return "参数不完整，需要提供分组ID和音频文件路径";
+                        if (groupName == null || groupName.isBlank() || text == null || text.isBlank()) {
+                            return "参数不完整，需要提供分组名称和广播文本内容";
                         }
 
-                        int groupId;
-                        if (groupIdObj instanceof Number) {
-                            groupId = ((Number) groupIdObj).intValue();
-                        } else {
-                            groupId = Integer.parseInt(groupIdObj.toString());
+                        // 通过 groupName + userId 查找分组，同时实现权限隔离
+                        Integer currentUserId = session.getSysDevice().getUserId();
+                        if (currentUserId == null) {
+                            return "无法获取用户信息，请先绑定设备";
                         }
 
-                        logger.info("广播音频 - 分组ID: {}, 音频路径: {}", groupId, audioPath);
-                        BroadcastService.BroadcastResult result = broadcastService.broadcastAudio(groupId, audioPath, session);
+                        SysDeviceGroup group = deviceGroupService.selectByUserIdAndName(currentUserId, groupName);
+                        if (group == null) {
+                            return "设备组不存在";
+                        }
+
+                        logger.info("广播语音 - 分组: {}, 文本: {}", groupName, text);
+                        // 使用 broadcastMessage 进行 TTS 合成后广播
+                        BroadcastService.BroadcastResult result = broadcastService.broadcastMessage(
+                                group.getGroupId(), text, session, currentUserId);
                         return result.message();
                     } catch (Exception e) {
-                        logger.error("广播音频失败", e);
-                        return "广播音频失败: " + e.getMessage();
+                        logger.error("广播语音失败", e);
+                        return "广播语音失败: " + e.getMessage();
                     }
                 })
                 .toolMetadata(ToolMetadata.builder().returnDirect(true).build())
-                .description("向设备组广播音频文件，将音频播放到组内所有在线设备。可用的设备组：" + groupList)
+                .description("向设备组广播语音消息，将文本通过TTS合成后播放到组内所有在线设备。可用的设备组：" + groupList)
                 .inputSchema("""
                     {
                         "type": "object",
                         "properties": {
-                            "groupId": {
-                                "type": "integer",
-                                "description": "设备分组ID"
-                            },
-                            "audioPath": {
+                            "groupName": {
                                 "type": "string",
-                                "description": "要广播的音频文件路径"
+                                "description": "设备分组名称"
+                            },
+                            "text": {
+                                "type": "string",
+                                "description": "要广播的文本内容，将通过TTS合成为语音后播放"
                             }
                         },
-                        "required": ["groupId", "audioPath"]
+                        "required": ["groupName", "text"]
                     }
                 """)
                 .inputType(Map.class)

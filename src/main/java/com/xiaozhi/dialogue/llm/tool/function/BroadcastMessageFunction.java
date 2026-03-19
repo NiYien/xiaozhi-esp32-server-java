@@ -47,29 +47,34 @@ public class BroadcastMessageFunction implements ToolsGlobalRegistry.GlobalFunct
         }
 
         String groupList = groups.stream()
-                .map(g -> g.getGroupName() + "(ID:" + g.getGroupId() + ",设备数:" + g.getDeviceCount() + ")")
+                .map(g -> g.getGroupName() + "(设备数:" + g.getDeviceCount() + ")")
                 .collect(Collectors.joining(", "));
 
         return FunctionToolCallback
                 .builder("broadcast_message", (Map<String, Object> params, ToolContext toolContext) -> {
                     ChatSession session = (ChatSession) toolContext.getContext().get(ChatService.TOOL_CONTEXT_SESSION_KEY);
                     try {
-                        Object groupIdObj = params.get("groupId");
+                        String groupName = (String) params.get("groupName");
                         String message = (String) params.get("message");
 
-                        if (groupIdObj == null || message == null || message.isBlank()) {
-                            return "参数不完整，需要提供分组ID和消息内容";
+                        if (groupName == null || groupName.isBlank() || message == null || message.isBlank()) {
+                            return "参数不完整，需要提供分组名称和消息内容";
                         }
 
-                        int groupId;
-                        if (groupIdObj instanceof Number) {
-                            groupId = ((Number) groupIdObj).intValue();
-                        } else {
-                            groupId = Integer.parseInt(groupIdObj.toString());
+                        // 通过 groupName + userId 查找分组，同时实现权限隔离
+                        Integer currentUserId = session.getSysDevice().getUserId();
+                        if (currentUserId == null) {
+                            return "无法获取用户信息，请先绑定设备";
                         }
 
-                        logger.info("广播文本消息 - 分组ID: {}, 消息: {}", groupId, message);
-                        BroadcastService.BroadcastResult result = broadcastService.broadcastMessage(groupId, message, session);
+                        SysDeviceGroup group = deviceGroupService.selectByUserIdAndName(currentUserId, groupName);
+                        if (group == null) {
+                            return "设备组不存在";
+                        }
+
+                        logger.info("广播文本消息 - 分组: {}, 消息: {}", groupName, message);
+                        BroadcastService.BroadcastResult result = broadcastService.broadcastMessage(
+                                group.getGroupId(), message, session, currentUserId);
                         return result.message();
                     } catch (Exception e) {
                         logger.error("广播消息失败", e);
@@ -82,16 +87,16 @@ public class BroadcastMessageFunction implements ToolsGlobalRegistry.GlobalFunct
                     {
                         "type": "object",
                         "properties": {
-                            "groupId": {
-                                "type": "integer",
-                                "description": "设备分组ID"
+                            "groupName": {
+                                "type": "string",
+                                "description": "设备分组名称"
                             },
                             "message": {
                                 "type": "string",
                                 "description": "要广播的文本消息内容"
                             }
                         },
-                        "required": ["groupId", "message"]
+                        "required": ["groupName", "message"]
                     }
                 """)
                 .inputType(Map.class)
