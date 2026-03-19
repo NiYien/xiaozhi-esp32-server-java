@@ -6,6 +6,7 @@ import com.xiaozhi.dialogue.llm.ChatService;
 import com.xiaozhi.dialogue.llm.intent.IntentDetector;
 import com.xiaozhi.dialogue.llm.intent.IntentDetector.UserIntent;
 import com.xiaozhi.dialogue.service.VadService.VadStatus;
+import com.xiaozhi.dialogue.voiceprint.VoiceprintRecognitionService;
 import com.xiaozhi.entity.SysDevice;
 import com.xiaozhi.event.ChatAbortEvent;
 import com.xiaozhi.service.*;
@@ -25,6 +26,7 @@ import jakarta.annotation.Resource;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 对话处理服务
@@ -61,6 +63,9 @@ public class DialogueService{
 
     @Autowired
     private SysDeviceService sysDeviceService;
+
+    @Resource
+    private VoiceprintRecognitionService voiceprintRecognitionService;
 
 
     @org.springframework.context.event.EventListener
@@ -176,7 +181,9 @@ public class DialogueService{
 
     /**
      * 启动语音识别
-     * 同步创建音频流（避免竞态条件），然后在虚拟线程中执行识别和对话
+     * 同步创建音频流（避免竞态条件），然后在虚拟线程中执行识别和对话。
+     * C1: 声纹识别在STT启动前同时启动（使用CompletableFuture+虚拟线程），
+     * 两者并行执行，STT完成后获取声纹结果并在LLM调用前绑定到session。
      */
     private void startStt(
             ChatSession session,
@@ -209,6 +216,11 @@ public class DialogueService{
                     return;
                 }
 
+                // C1: 在STT启动前同时启动声纹识别（与STT并行执行，利用虚拟线程）
+                // 声纹识别从VAD收集的PCM数据中提取嵌入向量，与STT无数据依赖，可完全并行
+                CompletableFuture<VoiceprintRecognitionService.RecognitionResult> voiceprintFuture =
+                        startVoiceprintRecognition(session);
+
                 // 记录 STT 调用开始时刻
                 session.setSttStartedAt(Instant.now());
 
@@ -224,6 +236,24 @@ public class DialogueService{
 
                 // 发送STT识别结果到设备
                 persona.getPlayer().sendStt(finalText);
+
+                // STT完成后获取声纹识别结果（此时声纹识别应已完成或即将完成）
+                // W2: 在LLM调用之前确保声纹结果已绑定到session
+                if (voiceprintFuture != null) {
+                    try {
+                        VoiceprintRecognitionService.RecognitionResult result = voiceprintFuture.join();
+                        if (result != null) {
+                            logger.info("声纹识别结果: userId={}, name={}, 相似度={}",
+                                    result.userId(), result.voiceprintName(),
+                                    String.format("%.4f", result.similarity()));
+                            // W2: 将识别到的说话人ID和名称注入到会话属性，供LLM对话使用
+                            session.setAttribute("speakerId", result.voiceprintId());
+                            session.setAttribute("speakerName", result.voiceprintName());
+                        }
+                    } catch (Exception e) {
+                        logger.debug("声纹识别结果获取失败（不影响主流程）: {}", e.getMessage());
+                    }
+                }
 
                 // 生成用户音频保存路径
                 Instant userInstant = Instant.now();
@@ -245,6 +275,56 @@ public class DialogueService{
                 logger.error("流式识别错误: {}", e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * 启动声纹识别（异步，与STT/LLM流程并行）
+     * 从VAD收集的PCM数据中提取说话人嵌入向量，与缓存中的声纹进行比对。
+     *
+     * @param session 聊天会话
+     * @return 声纹识别结果的Future，声纹功能不可用时返回null
+     */
+    private CompletableFuture<VoiceprintRecognitionService.RecognitionResult> startVoiceprintRecognition(
+            ChatSession session) {
+        if (!voiceprintRecognitionService.isAvailable()) {
+            return null;
+        }
+
+        SysDevice device = session.getSysDevice();
+        if (device == null) {
+            return null;
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                // 从VAD获取本轮PCM数据
+                List<byte[]> pcmFrames = vadService.getPcmData(session.getSessionId());
+                if (pcmFrames == null || pcmFrames.isEmpty()) {
+                    return null;
+                }
+
+                // 合并PCM帧
+                int totalSize = pcmFrames.stream().mapToInt(frame -> frame.length).sum();
+                byte[] fullPcmData = new byte[totalSize];
+                int offset = 0;
+                for (byte[] frame : pcmFrames) {
+                    System.arraycopy(frame, 0, fullPcmData, offset, frame.length);
+                    offset += frame.length;
+                }
+
+                // 提取嵌入向量
+                float[] embedding = voiceprintRecognitionService.extractEmbedding(fullPcmData);
+                if (embedding == null) {
+                    return null;
+                }
+
+                // 执行声纹比对
+                return voiceprintRecognitionService.recognize(device.getDeviceId(), embedding);
+            } catch (Exception e) {
+                logger.debug("声纹识别失败（不影响主流程）: {}", e.getMessage());
+                return null;
+            }
+        }, runnable -> Thread.startVirtualThread(runnable));
     }
 
     /**
