@@ -110,6 +110,13 @@ public class Persona {
      */
     private SysUserMemoryService userMemoryService;
 
+    /**
+     * 对话轮次计数器，每 MEMORY_EXTRACT_INTERVAL 轮触发一次记忆提取
+     */
+    private static final int MEMORY_EXTRACT_INTERVAL = 3;
+    @Builder.Default
+    private int dialogueTurnCount = 0;
+
     public Path chat(Flux<byte[]> audioSink){
         // 这个streamRecognition 是阻塞式的，不是异步的。
         final String userText = sttService.streamRecognition(audioSink);
@@ -309,6 +316,11 @@ public class Persona {
      */
     private void triggerMemoryExtraction(UserMessage userMessage, ChatResponse chatResponse) {
         if (userMemoryService == null || session == null || conversation == null) {
+            return;
+        }
+        // 每 MEMORY_EXTRACT_INTERVAL 轮对话触发一次记忆提取，避免过度调用 LLM
+        dialogueTurnCount++;
+        if (dialogueTurnCount % MEMORY_EXTRACT_INTERVAL != 0) {
             return;
         }
         try {

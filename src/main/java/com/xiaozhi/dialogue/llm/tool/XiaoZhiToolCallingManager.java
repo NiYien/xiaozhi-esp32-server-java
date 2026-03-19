@@ -389,12 +389,12 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
     }
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
-    private static final java.util.Random random = new java.util.Random();
+    private static final List<String> DEFAULT_COMFORT_WORDS = List.of("请稍等", "正在处理中", "让我想想");
 
     /**
      * 工具执行前发送安抚词。
      * 从当前会话的角色配置中获取安抚词列表，随机选取一条通过 TTS 播放给用户，
-     * 让用户在工具执行等待期间感到舒适。
+     * 让用户在工具执行等待期间感到舒适。未配置时使用默认安抚词，保证开箱即用。
      */
     private void sendComfortWord(ToolContext toolContext) {
         try {
@@ -408,18 +408,17 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
                 return;
             }
 
+            List<String> comfortWords = DEFAULT_COMFORT_WORDS;
             String comfortWordsJson = persona.getConversation().getRole().getComfortWords();
-            if (comfortWordsJson == null || comfortWordsJson.isBlank()) {
-                return;
-            }
-
-            List<String> comfortWords = objectMapper.readValue(comfortWordsJson, new TypeReference<List<String>>() {});
-            if (comfortWords.isEmpty()) {
-                return;
+            if (comfortWordsJson != null && !comfortWordsJson.isBlank()) {
+                List<String> configured = objectMapper.readValue(comfortWordsJson, new TypeReference<List<String>>() {});
+                if (!configured.isEmpty()) {
+                    comfortWords = configured;
+                }
             }
 
             // 随机选择一条安抚词
-            String comfortWord = comfortWords.get(random.nextInt(comfortWords.size()));
+            String comfortWord = comfortWords.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(comfortWords.size()));
             logger.info("工具调用前发送安抚词: {}", comfortWord);
 
             // 通过 Synthesizer 合成并播放安抚词
