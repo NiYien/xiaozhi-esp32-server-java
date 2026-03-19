@@ -3,6 +3,7 @@ package com.xiaozhi.dialogue.service;
 import com.xiaozhi.communication.common.ChatSession;
 import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.llm.tool.XiaozhiToolMetadata;
+import com.xiaozhi.dialogue.monitor.UsageMetricsHelper;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.service.SysMessageService;
@@ -16,6 +17,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -118,8 +120,22 @@ public class Persona {
     private int dialogueTurnCount = 0;
 
     public Path chat(Flux<byte[]> audioSink){
+        // 记录STT开始时间
+        long sttStartMs = System.currentTimeMillis();
+        boolean sttError = false;
         // 这个streamRecognition 是阻塞式的，不是异步的。
-        final String userText = sttService.streamRecognition(audioSink);
+        String userText;
+        try {
+            userText = sttService.streamRecognition(audioSink);
+        } catch (Exception e) {
+            sttError = true;
+            // 记录STT错误指标
+            recordSttMetrics(System.currentTimeMillis() - sttStartMs, true);
+            throw e;
+        }
+        // 记录STT成功指标
+        recordSttMetrics(System.currentTimeMillis() - sttStartMs, false);
+
         if (!StringUtils.hasText(userText)) {
             return null;
         }
@@ -150,6 +166,8 @@ public class Persona {
     private Flux<ChatResponse> chatStream(Path userSpeechPath, Instant now, UserMessage userMessage, boolean useFunctionCall) {
 
         AtomicReference<Instant> ttft = new AtomicReference<>(null);
+        // 记录LLM调用开始时间
+        final long llmStartMs = System.currentTimeMillis();
 
         ChatOptions chatOptions = ToolCallingChatOptions.builder()
                 .toolCallbacks(useFunctionCall ? session.getToolCallbacks() : new ArrayList<>())
@@ -184,6 +202,8 @@ public class Persona {
             // UserMessage 的时间戳应该在 Dialogue 中注入,与Conversation持有的是同一个UserMessage。
             dialogue.injectInstants();
             messageService.saveAll(dialogue.convert());
+            // 记录LLM用量指标
+            recordLlmMetrics(chatResponse, System.currentTimeMillis() - llmStartMs);
             // 异步提取用户长期记忆
             triggerMemoryExtraction(userMessage, chatResponse);
             if(disturbed){
@@ -348,5 +368,41 @@ public class Persona {
                 .mapNotNull(Generation::getOutput)
                 .mapNotNull(AssistantMessage::getText);
 
+    }
+
+    /**
+     * 记录 LLM 用量指标
+     */
+    private void recordLlmMetrics(ChatResponse chatResponse, long latencyMs) {
+        UsageMetricsHelper helper = UsageMetricsHelper.getInstance();
+        if (helper == null) {
+            return;
+        }
+        try {
+            Usage usage = null;
+            String provider = chatModel != null ? chatModel.getClass().getSimpleName() : "unknown";
+            if (chatResponse != null && chatResponse.getMetadata() != null) {
+                usage = chatResponse.getMetadata().getUsage();
+            }
+            helper.recordLlm(session, provider, usage, latencyMs, false);
+        } catch (Exception e) {
+            logger.debug("记录LLM指标失败", e);
+        }
+    }
+
+    /**
+     * 记录 STT 用量指标
+     */
+    private void recordSttMetrics(long latencyMs, boolean isError) {
+        UsageMetricsHelper helper = UsageMetricsHelper.getInstance();
+        if (helper == null) {
+            return;
+        }
+        try {
+            String provider = sttService != null ? sttService.getProviderName() : "unknown";
+            helper.recordStt(session, provider, latencyMs, isError);
+        } catch (Exception e) {
+            logger.debug("记录STT指标失败", e);
+        }
     }
 }

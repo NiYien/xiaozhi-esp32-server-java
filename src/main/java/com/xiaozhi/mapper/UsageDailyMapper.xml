@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.UsageDailyMapper">
+
+    <!-- 聚合写入：INSERT ON DUPLICATE KEY UPDATE -->
+    <insert id="insertOrUpdate" parameterType="com.xiaozhi.entity.SysUsageDaily">
+        INSERT INTO sys_usage_daily
+            (statDate, userId, deviceId, roleId, provider, serviceType,
+             requestCount, promptTokens, completionTokens, totalTokens, avgLatencyMs, errorCount)
+        VALUES
+            (#{statDate}, #{userId}, #{deviceId}, #{roleId}, #{provider}, #{serviceType},
+             #{requestCount}, #{promptTokens}, #{completionTokens}, #{totalTokens}, #{avgLatencyMs}, #{errorCount})
+        ON DUPLICATE KEY UPDATE
+            requestCount = requestCount + VALUES(requestCount),
+            promptTokens = promptTokens + VALUES(promptTokens),
+            completionTokens = completionTokens + VALUES(completionTokens),
+            totalTokens = totalTokens + VALUES(totalTokens),
+            avgLatencyMs = CASE
+                WHEN requestCount + VALUES(requestCount) > 0
+                THEN (avgLatencyMs * requestCount + VALUES(avgLatencyMs) * VALUES(requestCount))
+                     / (requestCount + VALUES(requestCount))
+                ELSE 0
+            END,
+            errorCount = errorCount + VALUES(errorCount)
+    </insert>
+
+    <!-- 按日查询用量，支持动态分组 -->
+    <select id="queryDailyUsage" resultType="java.util.HashMap">
+        SELECT
+            statDate,
+            <choose>
+                <when test="groupBy == 'user'">userId AS groupKey,</when>
+                <when test="groupBy == 'device'">deviceId AS groupKey,</when>
+                <when test="groupBy == 'role'">roleId AS groupKey,</when>
+                <when test="groupBy == 'provider'">provider AS groupKey,</when>
+                <otherwise>serviceType AS groupKey,</otherwise>
+            </choose>
+            serviceType,
+            SUM(requestCount) AS requestCount,
+            SUM(promptTokens) AS promptTokens,
+            SUM(completionTokens) AS completionTokens,
+            SUM(totalTokens) AS totalTokens,
+            CASE WHEN SUM(requestCount) > 0
+                THEN ROUND(SUM(avgLatencyMs * requestCount) / SUM(requestCount))
+                ELSE 0
+            END AS avgLatencyMs,
+            SUM(errorCount) AS errorCount
+        FROM sys_usage_daily
+        WHERE statDate BETWEEN #{startDate} AND #{endDate}
+        <if test="userId != null">AND userId = #{userId}</if>
+        GROUP BY statDate,
+            <choose>
+                <when test="groupBy == 'user'">userId,</when>
+                <when test="groupBy == 'device'">deviceId,</when>
+                <when test="groupBy == 'role'">roleId,</when>
+                <when test="groupBy == 'provider'">provider,</when>
+                <otherwise>serviceType,</otherwise>
+            </choose>
+            serviceType
+        ORDER BY statDate ASC
+    </select>
+
+    <!-- 周期汇总查询 -->
+    <select id="querySummary" resultType="java.util.HashMap">
+        SELECT
+            COALESCE(SUM(CASE WHEN serviceType = 'llm' THEN requestCount ELSE 0 END), 0) AS totalLlmCalls,
+            COALESCE(SUM(CASE WHEN serviceType = 'stt' THEN requestCount ELSE 0 END), 0) AS totalSttCalls,
+            COALESCE(SUM(CASE WHEN serviceType = 'tts' THEN requestCount ELSE 0 END), 0) AS totalTtsCalls,
+            COALESCE(SUM(requestCount), 0) AS totalCalls,
+            COALESCE(SUM(promptTokens), 0) AS totalPromptTokens,
+            COALESCE(SUM(completionTokens), 0) AS totalCompletionTokens,
+            COALESCE(SUM(totalTokens), 0) AS totalTokens,
+            COALESCE(SUM(errorCount), 0) AS totalErrors,
+            CASE WHEN SUM(CASE WHEN serviceType = 'llm' THEN requestCount ELSE 0 END) > 0
+                THEN ROUND(SUM(CASE WHEN serviceType = 'llm' THEN avgLatencyMs * requestCount ELSE 0 END)
+                     / SUM(CASE WHEN serviceType = 'llm' THEN requestCount ELSE 0 END))
+                ELSE 0
+            END AS avgLlmLatencyMs
+        FROM sys_usage_daily
+        WHERE statDate BETWEEN #{startDate} AND #{endDate}
+        <if test="userId != null">AND userId = #{userId}</if>
+    </select>
+
+    <!-- 延迟趋势查询（按日、按 serviceType） -->
+    <select id="queryLatencyTrend" resultType="java.util.HashMap">
+        SELECT
+            statDate,
+            serviceType,
+            CASE WHEN SUM(requestCount) > 0
+                THEN ROUND(SUM(avgLatencyMs * requestCount) / SUM(requestCount))
+                ELSE 0
+            END AS avgLatencyMs,
+            SUM(requestCount) AS requestCount
+        FROM sys_usage_daily
+        WHERE statDate BETWEEN #{startDate} AND #{endDate}
+        <if test="serviceType != null and serviceType != ''">AND serviceType = #{serviceType}</if>
+        <if test="userId != null">AND userId = #{userId}</if>
+        GROUP BY statDate, serviceType
+        ORDER BY statDate ASC
+    </select>
+
+    <!-- 活跃设备统计 -->
+    <select id="queryActiveDevices" resultType="java.util.HashMap">
+        SELECT
+            deviceId,
+            SUM(requestCount) AS totalRequests,
+            MAX(statDate) AS lastActiveDate,
+            COUNT(DISTINCT statDate) AS activeDays
+        FROM sys_usage_daily
+        WHERE statDate BETWEEN #{startDate} AND #{endDate}
+            AND deviceId IS NOT NULL
+        <if test="userId != null">AND userId = #{userId}</if>
+        GROUP BY deviceId
+        ORDER BY totalRequests DESC
+        LIMIT 50
+    </select>
+
+</mapper>

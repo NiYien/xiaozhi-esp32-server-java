@@ -65,6 +65,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'monitor',
+        name: 'monitor',
+        component: () => import('../views/MonitorView.vue'),
+        meta: {
+          title: 'router.title.monitor',
+          icon: 'MonitorOutlined',
+          requiresAuth: true,
+          permission: 'system:monitor',
+        },
+      },
+      {
         path: 'user',
         name: 'user',
         component: () => import('../views/UserView.vue'),

@@ -1,6 +1,7 @@
 package com.xiaozhi.dialogue.service;
 
 import com.xiaozhi.communication.common.ChatSession;
+import com.xiaozhi.dialogue.monitor.UsageMetricsHelper;
 import com.xiaozhi.dialogue.tts.TtsService;
 import com.xiaozhi.utils.AudioUtils;
 import org.slf4j.Logger;
@@ -73,8 +74,11 @@ public class FileSynthesizer extends Synthesizer {
 
             // 在虚拟线程中异步提交 TTS 合成
             CompletableFuture<Speech> ttsFuture = CompletableFuture.supplyAsync(() -> {
+                long ttsStartMs = System.currentTimeMillis();
                 try {
                     String audioPath = ttsService.textToSpeech(text);
+                    // 记录TTS成功指标
+                    recordTtsMetrics(System.currentTimeMillis() - ttsStartMs, false);
                     // TTFS profiling: 记录首句 TTS 合成完成时刻
                     if (firstTtsRecorded.compareAndSet(false, true)) {
                         chatSession.setTtsFirstCompletedAt(Instant.now());
@@ -87,6 +91,8 @@ public class FileSynthesizer extends Synthesizer {
                         return null;
                     }
                 } catch (Exception e) {
+                    // 记录TTS错误指标
+                    recordTtsMetrics(System.currentTimeMillis() - ttsStartMs, true);
                     logger.error("TTS合成出错: {} - SessionId: {}", e.getMessage(), chatSession.getSessionId());
                     return null;
                 }
@@ -120,4 +126,19 @@ public class FileSynthesizer extends Synthesizer {
         synthesize(Flux.just(text));
     }
 
+    /**
+     * 记录 TTS 用量指标
+     */
+    private void recordTtsMetrics(long latencyMs, boolean isError) {
+        UsageMetricsHelper helper = UsageMetricsHelper.getInstance();
+        if (helper == null) {
+            return;
+        }
+        try {
+            String provider = ttsService != null ? ttsService.getProviderName() : "unknown";
+            helper.recordTts(chatSession, provider, latencyMs, isError);
+        } catch (Exception e) {
+            logger.debug("记录TTS指标失败", e);
+        }
+    }
 }

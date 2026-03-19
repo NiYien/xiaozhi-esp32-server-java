@@ -71,6 +71,12 @@ export default {
     summary: '/memory/summary',
     long: '/memory/long',
   },
+  monitor: {
+    dailyUsage: '/monitor/usage/daily',
+    summary: '/monitor/usage/summary',
+    activeDevices: '/monitor/active-devices',
+    latency: '/monitor/latency',
+  },
 }
 
 

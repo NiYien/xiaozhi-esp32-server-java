@@ -333,6 +333,17 @@ public class SessionManager {
         captchaGenerationTracker.unmarkCaptchaGeneration(deviceId);
     }
 
+    /**
+     * 获取当前在线设备数量
+     *
+     * @return 在线设备数量
+     */
+    public int getOnlineDeviceCount() {
+        return (int) sessionRegistry.getAllSessions().stream()
+                .filter(session -> session.getSysDevice() != null)
+                .count();
+    }
+
     // ---- 活动监控（委托给 SessionActivityMonitor） ----
 
     /**
