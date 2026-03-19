@@ -25,6 +25,7 @@
     "ant-design-vue": "^4.2.6",
     "axios": "^1.12.2",
     "dayjs": "^1.11.18",
+    "echarts": "^6.0.0",
     "jsencrypt": "^3.5.4",
     "jsonp": "^0.2.1",
     "mammoth": "^1.11.0",
