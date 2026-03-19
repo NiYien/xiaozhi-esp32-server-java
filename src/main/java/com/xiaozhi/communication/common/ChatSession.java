@@ -114,6 +114,17 @@ public abstract class ChatSession {
      * 最近一次对话的模型响应时间及TTS响应时间
      */
     public static final String ATTR_FIRST_TTS_RESPONSE_TIME = "firstTtsResponseTime";
+
+    /**
+     * TTFS（Time To First Speech）指标追踪：
+     * 记录 VAD 检测到语音结束的时刻，作为端到端延迟的起点
+     */
+    protected volatile Instant speechEndAt;
+
+    /**
+     * STT 完成时刻（用于 TTFS 分段耗时计算）
+     */
+    protected volatile Instant sttCompletedAt;
     /**
      * 会话属性存储
      */

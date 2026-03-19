@@ -59,6 +59,9 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
     private long startTimestamp = 0;  // 播放开始的绝对时间戳（纳秒）
     private long playPosition = BURST_PREBUFFER_NS;  // 当前播放位置（纳秒），初始为-120ms实现预缓冲
 
+    // TTFS 追踪：是否已发送首帧 Opus（用于计算端到端延迟）
+    private volatile boolean firstOpusFrameSent = false;
+
     // 音频帧队列
     private Queue<Speech> allOpusFrames = new ConcurrentLinkedQueue<>();
 
@@ -237,6 +240,7 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
                         // 重置Burst模式状态，避免下次play()时因旧的startTimestamp导致所有帧以零延迟发送
                         startTimestamp = 0;
                         playPosition = BURST_PREBUFFER_NS;
+                        firstOpusFrameSent = false;
                         sendStop();
                         break;
                     }
@@ -318,6 +322,12 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
         // 发送音频帧
         sendOpusFrame(frame);
 
+        // TTFS 指标追踪：首帧 Opus 发送时计算端到端延迟
+        if (!firstOpusFrameSent) {
+            firstOpusFrameSent = true;
+            logTtfs();
+        }
+
         // 更新播放位置（每帧增加60ms）
         playPosition += OPUS_FRAME_SEND_INTERVAL_NS;
     }
@@ -348,9 +358,54 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
         // 重置Burst模式状态
         startTimestamp = 0;
         playPosition = BURST_PREBUFFER_NS;
+        firstOpusFrameSent = false;
 
         // 中断时主动关闭文件，避免产生损坏的 Opus 文件
         closeOpusFile();
+    }
+
+    /**
+     * 记录 TTFS（Time To First Speech）端到端指标日志。
+     * 从 VAD 检测到语音结束（speechEndAt）到首帧 Opus 发送的完整耗时，并分段记录各阶段耗时。
+     */
+    private void logTtfs() {
+        try {
+            Instant speechEndAt = session.getSpeechEndAt();
+            if (speechEndAt == null) {
+                return;
+            }
+
+            Instant now = Instant.now();
+            long ttfsMs = java.time.Duration.between(speechEndAt, now).toMillis();
+
+            // 分段耗时计算
+            Instant sttCompletedAt = session.getSttCompletedAt();
+            Instant assistantFirstTokenAt = (this instanceof PlayerWithOpusFile playerWithOpus)
+                    ? playerWithOpus.getAssistantMessageCreatedAt() : null;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("TTFS: ").append(ttfsMs).append("ms");
+
+            if (sttCompletedAt != null) {
+                long sttMs = java.time.Duration.between(speechEndAt, sttCompletedAt).toMillis();
+                sb.append(" (STT: ").append(sttMs).append("ms");
+
+                if (assistantFirstTokenAt != null) {
+                    long llmTtftMs = java.time.Duration.between(sttCompletedAt, assistantFirstTokenAt).toMillis();
+                    long ttsAndSendMs = java.time.Duration.between(assistantFirstTokenAt, now).toMillis();
+                    sb.append(", LLM-TTFT: ").append(llmTtftMs).append("ms");
+                    sb.append(", TTS-首句+编码+发送: ").append(ttsAndSendMs).append("ms");
+                }
+
+                sb.append(")");
+            }
+
+            sb.append(" - SessionId: ").append(session.getSessionId());
+            logger.info(sb.toString());
+
+        } catch (Exception e) {
+            logger.debug("TTFS指标记录失败: {}", e.getMessage());
+        }
     }
 
     /**

@@ -160,10 +160,15 @@ public class DialogueService{
     }
 
     /**
-     * 处理语音结束：完成流式识别
+     * 处理语音结束：完成流式识别，并记录 speechEndAt 时间戳作为 TTFS 起点
      */
     private void handleSpeechEnd(String sessionId) {
         if (sessionManager.isStreaming(sessionId)) {
+            // D4: 记录 speechEndAt 时间戳，作为 TTFS 端到端延迟的起点
+            ChatSession session = sessionManager.getSession(sessionId);
+            if (session != null) {
+                session.setSpeechEndAt(Instant.now());
+            }
             sessionManager.completeAudioStream(sessionId);
             sessionManager.setStreamingState(sessionId, false);
         }
@@ -207,6 +212,9 @@ public class DialogueService{
                 if (!StringUtils.hasText(finalText)) {
                     return;
                 }
+
+                // 记录 STT 完成时刻（用于 TTFS 分段耗时计算）
+                session.setSttCompletedAt(Instant.now());
 
                 // 发送STT识别结果到设备
                 persona.getPlayer().sendStt(finalText);
