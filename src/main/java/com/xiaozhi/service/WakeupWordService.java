@@ -17,9 +17,9 @@ import java.util.stream.Collectors;
  * 管理唤醒词与角色的映射关系，提供缓存加速查询
  */
 @Service
-public class DeviceWakeupService {
+public class WakeupWordService {
 
-    private static final Logger logger = LoggerFactory.getLogger(DeviceWakeupService.class);
+    private static final Logger logger = LoggerFactory.getLogger(WakeupWordService.class);
 
     @Resource
     private DeviceWakeupMapper deviceWakeupMapper;

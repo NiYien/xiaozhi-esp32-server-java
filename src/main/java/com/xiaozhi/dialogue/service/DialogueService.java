@@ -69,7 +69,7 @@ public class DialogueService{
     private VoiceprintRecognitionService voiceprintRecognitionService;
 
     @Autowired
-    private DeviceWakeupService deviceWakeupService;
+    private WakeupWordService deviceWakeupService;
 
 
     @org.springframework.context.event.EventListener
