@@ -8,6 +8,7 @@ import { message } from 'ant-design-vue'
 import { queryConfigs } from '@/services/config'
 import { queryAgents } from '@/services/agent'
 import { querySherpaVoices } from '@/services/role'
+import { queryVoiceClones } from '@/services/voiceClone'
 import type { ModelOption, VoiceOption, SttOption, VoiceProvider } from '@/types/role'
 import type { Config } from '@/types/config'
 import type { Agent } from '@/types/agent'
@@ -192,6 +193,26 @@ export function useRoleManager() {
             ttsId: sherpaConfig.configId
           })
         })
+      }
+
+      // 克隆音色（status=ready 的）
+      try {
+        const cloneRes = await queryVoiceClones()
+        if (cloneRes.code === 200 && cloneRes.data) {
+          const readyClones = (Array.isArray(cloneRes.data) ? cloneRes.data : [])
+            .filter((c: any) => c.status === 'ready')
+          readyClones.forEach((clone: any) => {
+            voices.push({
+              label: `[clone] ${clone.cloneName}`,
+              value: `clone:${clone.cloneId}`,
+              gender: '' as const,
+              provider: clone.provider,
+              ttsId: clone.configId
+            })
+          })
+        }
+      } catch {
+        // 克隆音色加载失败不影响主流程
       }
 
       allVoices.value = voices

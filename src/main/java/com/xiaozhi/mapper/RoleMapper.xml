@@ -161,4 +161,8 @@
         DELETE FROM sys_role WHERE roleId = #{roleId}
     </delete>
 
+    <update id="clearVoiceName">
+        UPDATE sys_role SET voiceName = NULL WHERE voiceName = #{voiceName}
+    </update>
+
 </mapper>

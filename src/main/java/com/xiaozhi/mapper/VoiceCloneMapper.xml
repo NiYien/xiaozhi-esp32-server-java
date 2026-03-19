@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.VoiceCloneMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysVoiceClone">
+        <id property="cloneId" column="cloneId" />
+        <result property="userId" column="userId" />
+        <result property="cloneName" column="cloneName" />
+        <result property="provider" column="provider" />
+        <result property="configId" column="configId" />
+        <result property="taskId" column="taskId" />
+        <result property="voiceId" column="voiceId" />
+        <result property="samplePath" column="samplePath" />
+        <result property="status" column="status" />
+        <result property="errorMessage" column="errorMessage" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        cloneId, userId, cloneName, provider, configId, taskId, voiceId,
+        samplePath, status, errorMessage, createTime, updateTime
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="cloneId" parameterType="com.xiaozhi.entity.SysVoiceClone">
+        INSERT INTO sys_voice_clone (userId, cloneName, provider, configId, taskId, voiceId, samplePath, status, errorMessage)
+        VALUES (#{userId}, #{cloneName}, #{provider}, #{configId}, #{taskId}, #{voiceId}, #{samplePath}, #{status}, #{errorMessage})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysVoiceClone">
+        UPDATE sys_voice_clone
+        <set>
+            <if test="cloneName != null and cloneName != ''">cloneName = #{cloneName},</if>
+            <if test="taskId != null and taskId != ''">taskId = #{taskId},</if>
+            <if test="voiceId != null and voiceId != ''">voiceId = #{voiceId},</if>
+            <if test="samplePath != null and samplePath != ''">samplePath = #{samplePath},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="errorMessage != null">errorMessage = #{errorMessage},</if>
+        </set>
+        WHERE cloneId = #{cloneId}
+    </update>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM sys_voice_clone
+        WHERE cloneId = #{cloneId}
+    </select>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM sys_voice_clone
+        WHERE userId = #{userId}
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectByStatus" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM sys_voice_clone
+        WHERE status = #{status}
+    </select>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*) FROM sys_voice_clone WHERE userId = #{userId}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM sys_voice_clone WHERE cloneId = #{cloneId}
+    </delete>
+
+</mapper>
