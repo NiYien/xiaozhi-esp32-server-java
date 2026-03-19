@@ -5,6 +5,7 @@ import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.llm.tool.ToolsSessionHolder;
 import com.xiaozhi.dialogue.llm.tool.mcp.device.DeviceMcpHolder;
 import com.xiaozhi.dialogue.service.Player;
+import com.xiaozhi.dialogue.service.PersonaRegistry;
 import com.xiaozhi.entity.SysDevice;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.enums.ListenMode;
@@ -43,7 +44,25 @@ public abstract class ChatSession {
      */
     protected List<SysRole> sysRoleList;
 
-    protected Persona persona;
+    /**
+     * 多 Persona 缓存注册表，支持唤醒词切换角色时保留对话上下文
+     */
+    protected PersonaRegistry personaRegistry = new PersonaRegistry();
+
+    /**
+     * 获取当前活跃的 Persona（向后兼容）
+     */
+    public Persona getPersona() {
+        return personaRegistry.getActive();
+    }
+
+    /**
+     * 设置活跃的 Persona（向后兼容）
+     * 如果传入 null，仅清除活跃状态，不影响缓存中的其他 Persona
+     */
+    public void setPersona(Persona persona) {
+        personaRegistry.setActive(persona);
+    }
 
     /**
      * 设备iot信息

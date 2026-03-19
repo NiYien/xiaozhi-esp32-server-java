@@ -125,7 +125,8 @@ public class ChatService {
                 .goodbyeMessages(goodbyeMessages)
                 .userMemoryService(userMemoryService)
                 .build();
-        session.setPersona(persona);
+        // 将 Persona 放入 PersonaRegistry 并激活
+        session.getPersonaRegistry().putAndActivate(role.getRoleId(), persona);
         return persona;
     }
 
@@ -182,14 +183,14 @@ public class ChatService {
      */
     @EventListener
     public void handleSessionClose(ChatSessionCloseEvent event) {
-        Optional.ofNullable(event.getSession())
-                .map(ChatSession::getPersona)
-                .map(Persona::getConversation)
-                .ifPresent(Conversation::clear);
+        ChatSession session = event.getSession();
+        if (session == null) {
+            return;
+        }
+        // 释放 PersonaRegistry 中所有缓存的 Persona（包括对话历史、合成器、播放器等资源）
+        session.getPersonaRegistry().releaseAll();
         // 清理ChatSession中可能绑定的播放器资源
-        Optional.ofNullable(event.getSession())
-                .map(ChatSession::getPlayer)
+        Optional.ofNullable(session.getPlayer())
                 .ifPresent(Player::stop);
-
     }
 }

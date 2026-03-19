@@ -7,6 +7,7 @@ import com.xiaozhi.dialogue.llm.intent.IntentDetector;
 import com.xiaozhi.dialogue.llm.intent.IntentDetector.UserIntent;
 import com.xiaozhi.dialogue.service.VadService.VadStatus;
 import com.xiaozhi.entity.SysDevice;
+import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.event.ChatAbortEvent;
 import com.xiaozhi.service.*;
 
@@ -61,6 +62,9 @@ public class DialogueService{
 
     @Autowired
     private SysDeviceService sysDeviceService;
+
+    @Autowired
+    private DeviceWakeupService deviceWakeupService;
 
 
     @org.springframework.context.event.EventListener
@@ -249,6 +253,7 @@ public class DialogueService{
 
     /**
      * 处理语音唤醒
+     * 根据唤醒词文本查找映射的角色，实现不同唤醒词激活不同角色
      */
     public void handleWakeWord(ChatSession session, String text) {
         logger.info("检测到唤醒词: {}", text);
@@ -261,7 +266,44 @@ public class DialogueService{
                 return;
             }
 
-            session.getPersona().wakeUp(text);
+            // 根据唤醒词查找映射的角色ID
+            Integer targetRoleId = deviceWakeupService.getRoleIdByWakeupWord(device.getDeviceId(), text);
+            if (targetRoleId == null) {
+                // 未匹配，回退到设备默认角色
+                targetRoleId = device.getRoleId();
+                logger.debug("唤醒词 '{}' 未匹配到映射，使用默认角色 roleId: {}", text, targetRoleId);
+            } else {
+                logger.info("唤醒词 '{}' 匹配到角色 roleId: {}", text, targetRoleId);
+            }
+
+            // 切换角色前，停止当前角色的播放（避免音频混合）
+            Persona currentPersona = session.getPersona();
+            if (currentPersona != null && currentPersona.getPlayer() != null) {
+                currentPersona.getPlayer().stop();
+            }
+
+            // 从 PersonaRegistry 获取或创建目标角色的 Persona
+            PersonaRegistry registry = session.getPersonaRegistry();
+            final Integer roleId = targetRoleId;
+            Persona persona = registry.getOrCreate(roleId, () -> {
+                // 需要从数据库加载角色信息并构建 Persona
+                SysRole role = roleService.selectRoleById(roleId);
+                if (role == null) {
+                    logger.error("角色不存在，roleId: {}", roleId);
+                    return null;
+                }
+                return chatService.buildPersona(session, device, role);
+            });
+
+            if (persona == null) {
+                logger.error("无法创建 Persona，roleId: {}", roleId);
+                return;
+            }
+
+            // 激活目标角色
+            registry.activate(roleId);
+
+            persona.wakeUp(text);
         } catch (Exception e) {
             logger.error("处理唤醒词失败: {}", e.getMessage(), e);
         }

@@ -210,13 +210,12 @@ public class DeviceController extends BaseController {
 
             deviceService.update(device);
 
-            // 如果切换了角色，清理Persona（包含Conversation、Synthesizer等），下次唤醒时会重新构建
+            // 如果切换了角色，清理所有缓存的 Persona（包含Conversation、Synthesizer等），下次唤醒时会重新构建
             if (roleChanged) {
                 ChatSession session = sessionManager.getSessionByDeviceId(deviceId);
-                if (session != null && session.getPersona() != null) {
-                    session.getPersona().getConversation().clear();
-                    session.setPersona(null);
-                    logger.info("设备 {} 切换角色，已清理Persona及对话历史", deviceId);
+                if (session != null) {
+                    session.getPersonaRegistry().releaseAll();
+                    logger.info("设备 {} 切换角色，已清理所有缓存的 Persona 及对话历史", deviceId);
                 }
             }
 

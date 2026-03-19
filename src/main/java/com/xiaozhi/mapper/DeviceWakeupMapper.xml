@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.DeviceWakeupMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysDeviceWakeup">
+        <id property="id" column="id" />
+        <result property="deviceId" column="deviceId" />
+        <result property="wakeupWord" column="wakeupWord" />
+        <result property="roleId" column="roleId" />
+        <result property="priority" column="priority" />
+        <result property="createTime" column="createTime" />
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="com.xiaozhi.entity.SysDeviceWakeup">
+        INSERT INTO sys_device_wakeup (deviceId, wakeupWord, roleId, priority)
+        VALUES (#{deviceId}, #{wakeupWord}, #{roleId}, #{priority})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysDeviceWakeup">
+        UPDATE sys_device_wakeup
+        <set>
+            <if test="roleId != null">roleId = #{roleId},</if>
+            <if test="priority != null">priority = #{priority},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM sys_device_wakeup WHERE id = #{id}
+    </delete>
+
+    <select id="queryByDevice" resultMap="BaseResultMap">
+        SELECT id, deviceId, wakeupWord, roleId, priority, createTime
+        FROM sys_device_wakeup
+        WHERE deviceId = #{deviceId}
+        ORDER BY priority ASC
+    </select>
+
+    <select id="queryByDeviceAndWord" resultMap="BaseResultMap">
+        SELECT id, deviceId, wakeupWord, roleId, priority, createTime
+        FROM sys_device_wakeup
+        WHERE deviceId = #{deviceId} AND wakeupWord = #{wakeupWord}
+        LIMIT 1
+    </select>
+
+</mapper>

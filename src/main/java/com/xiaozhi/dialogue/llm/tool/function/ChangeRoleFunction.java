@@ -60,13 +60,15 @@ public class ChangeRoleFunction implements ToolsGlobalRegistry.GlobalFunction {
                                 SysRole role = changedRole.get();
                                 sysDevice.setRoleId(role.getRoleId());
                                 sysDeviceService.update(sysDevice);
-                                // 切换了角色，需要更换Conversation
-                                if(chatSession.getPersona().getConversation()!=null){
-                                    chatSession.getPersona().getConversation().clear();
+                                // 切换角色前停止当前播放
+                                if(chatSession.getPlayer() != null){
+                                    chatSession.getPlayer().stop();
                                 }
-
-                                Persona persona = chatService.buildPersona(chatSession, sysDevice, role);
-                                chatSession.setPersona(persona);
+                                // 从 PersonaRegistry 获取或创建目标角色的 Persona
+                                var registry = chatSession.getPersonaRegistry();
+                                Persona persona = registry.getOrCreate(role.getRoleId(), () ->
+                                        chatService.buildPersona(chatSession, sysDevice, role));
+                                registry.activate(role.getRoleId());
                                 return "角色已切换至" + roleName;
                             }else{
                                 return "角色切换失败, 没有对应角色哦";
