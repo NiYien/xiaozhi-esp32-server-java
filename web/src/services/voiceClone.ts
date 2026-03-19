@@ -21,7 +21,7 @@ export interface VoiceClone {
   updateTime: string
 }
 
-const API_PREFIX = '/api/voice-clone'
+const API_PREFIX = '/voice-clone'
 
 /**
  * 查询音色克隆列表
