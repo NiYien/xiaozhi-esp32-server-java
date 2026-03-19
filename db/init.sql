@@ -357,4 +357,34 @@ UPDATE `xiaozhi`.`sys_user` SET `roleId` = 1 WHERE `username` = 'admin';
 -- 将其他用户设为普通用户角色
 UPDATE `xiaozhi`.`sys_user` SET `roleId` = 2 WHERE `username` != 'admin';
 
+-- xiaozhi.sys_firmware definition
+DROP TABLE IF EXISTS `xiaozhi`.`sys_firmware`;
+CREATE TABLE `xiaozhi`.`sys_firmware` (
+  `firmwareId` int unsigned NOT NULL AUTO_INCREMENT COMMENT '固件ID，主键',
+  `firmwareName` varchar(100) NOT NULL COMMENT '固件名称',
+  `version` varchar(50) NOT NULL COMMENT '版本号',
+  `chipModelName` varchar(100) DEFAULT NULL COMMENT '适用芯片型号，NULL表示通用',
+  `deviceType` varchar(50) DEFAULT NULL COMMENT '适用设备类型，NULL表示通用',
+  `url` varchar(500) NOT NULL COMMENT '固件下载地址',
+  `fileSize` bigint DEFAULT NULL COMMENT '固件文件大小（字节）',
+  `fileHash` varchar(64) DEFAULT NULL COMMENT 'SHA-256哈希值',
+  `description` text COMMENT '版本说明',
+  `isDefault` enum('1','0') DEFAULT '0' COMMENT '是否为默认固件：1-是，0-否',
+  `userId` int DEFAULT NULL COMMENT '上传用户',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updateTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`firmwareId`),
+  KEY `chipModelName` (`chipModelName`),
+  KEY `deviceType` (`deviceType`),
+  KEY `isDefault` (`isDefault`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='固件信息表';
+
+-- 插入固件管理菜单权限
+INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `permissionType`, `path`, `component`, `icon`, `sort`, `visible`, `status`) VALUES
+(7, '固件管理', 'system:config:firmware', 'menu', '/config/firmware', 'page/config/FirmwareConfig', NULL, 5, '1', '1');
+
+-- 管理员角色赋予固件管理权限
+INSERT INTO `xiaozhi`.`sys_role_permission` (`roleId`, `permissionId`)
+SELECT 1, permissionId FROM `xiaozhi`.`sys_permission` WHERE `permissionKey` = 'system:config:firmware';
+
 SET FOREIGN_KEY_CHECKS = 1;
