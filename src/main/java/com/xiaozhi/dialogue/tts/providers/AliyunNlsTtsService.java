@@ -9,8 +9,10 @@ import com.alibaba.nls.client.protocol.tts.SpeechSynthesizerResponse;
 import com.xiaozhi.dialogue.token.TokenService;
 import com.xiaozhi.dialogue.tts.AbstractTtsService;
 import com.xiaozhi.entity.SysConfig;
+import com.xiaozhi.utils.AudioUtils;
 
 import org.slf4j.LoggerFactory;
+import reactor.core.publisher.Flux;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -223,6 +225,99 @@ public class AliyunNlsTtsService extends AbstractTtsService {
             globalClientCache.remove(config.getConfigId());
             throw e;
         }
+    }
+
+    /**
+     * 支持流式语音合成
+     */
+    @Override
+    public boolean supportsStreaming() {
+        return true;
+    }
+
+    /**
+     * 流式语音合成，通过NLS SDK的onMessage回调逐步返回PCM数据块。
+     * 每次onMessage回调产生一个PCM数据块，直接推送到Flux中，无需等待整个合成完成。
+     *
+     * @param text 要转换为语音的文本
+     * @return PCM数据块的响应式流
+     */
+    @Override
+    public Flux<byte[]> textToSpeechStream(String text) {
+        if (text == null || text.isEmpty()) {
+            logger.warn("流式TTS文本内容为空！");
+            return Flux.empty();
+        }
+
+        return Flux.create(sink -> {
+            SpeechSynthesizer synthesizer = null;
+            try {
+                NlsClient client = getOrCreateClient();
+
+                synthesizer = new SpeechSynthesizer(client, new SpeechSynthesizerListener() {
+                    @Override
+                    public void onComplete(SpeechSynthesizerResponse response) {
+                        sink.complete();
+                    }
+
+                    @Override
+                    public void onFail(SpeechSynthesizerResponse response) {
+                        logger.error("NLS流式语音合成失败 - TaskId: {}, Status: {}, StatusText: {}",
+                                response.getTaskId(), response.getStatus(), response.getStatusText());
+                        sink.error(new RuntimeException("NLS流式语音合成失败: " + response.getStatusText()));
+                    }
+
+                    @Override
+                    public void onMessage(ByteBuffer message) {
+                        if (sink.isCancelled()) {
+                            return;
+                        }
+                        byte[] buffer = new byte[message.remaining()];
+                        message.get(buffer);
+                        // NLS以PCM格式返回纯音频数据，直接推送到Flux
+                        sink.next(buffer);
+                    }
+                });
+
+                // 设置appKey
+                synthesizer.setAppKey(config.getApiKey());
+                // 设置为PCM格式，避免WAV头的处理问题
+                synthesizer.setFormat(OutputFormatEnum.PCM);
+                // 设置采样率
+                synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+                // 设置语音
+                synthesizer.setVoice(getVoiceName());
+                // 设置音量
+                synthesizer.setVolume(100);
+
+                // 设置语速和音调（映射：0.5-2.0 → -500~500）
+                int nlsSpeed = (int) Math.round((getSpeed() - 1.0f) * 500);
+                int nlsPitch = (int) Math.round((getPitch() - 1.0f) * 500);
+                nlsSpeed = Math.max(-500, Math.min(500, nlsSpeed));
+                nlsPitch = Math.max(-500, Math.min(500, nlsPitch));
+
+                synthesizer.setSpeechRate(nlsSpeed);
+                synthesizer.setPitchRate(nlsPitch);
+
+                synthesizer.setText(text);
+                synthesizer.start();
+
+                // 注册取消回调，用户打断时关闭合成器
+                final SpeechSynthesizer synthesizerRef = synthesizer;
+                sink.onDispose(() -> {
+                    try {
+                        synthesizerRef.close();
+                    } catch (Exception e) {
+                        logger.debug("关闭流式NLS合成器时发生错误", e);
+                    }
+                });
+
+            } catch (Exception e) {
+                // NLS连接异常时清除缓存
+                globalClientCache.remove(config.getConfigId());
+                sink.error(e);
+            }
+        });
     }
 
     /**

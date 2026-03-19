@@ -170,6 +170,11 @@ public class ChatService {
         String voiceName = role.getVoiceName();
         TtsService ttsService = ttsFactory.getTtsService(ttsConfig, voiceName, role.getTtsPitch(), role.getTtsSpeed());
 
+        // 根据TTS提供商是否支持流式输出，自动选择合成器类型
+        if (ttsService.supportsStreaming()) {
+            logger.info("TTS提供商[{}]支持流式输出，使用StreamingSynthesizer", ttsService.getProviderName());
+            return new StreamingSynthesizer(session, ttsService, player);
+        }
         return new FileSynthesizer(session, ttsService, player);
 
     }
