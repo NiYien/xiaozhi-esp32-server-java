@@ -185,3 +185,14 @@ xiaozhi:
 check:
   inactive:
     session: true
+
+# ============================================================
+# 声纹识别配置
+# ============================================================
+voiceprint:
+  # 声纹嵌入模型路径（不存在时自动禁用声纹功能）
+  model:
+    path: models/speaker_embedding.onnx
+  # 余弦相似度阈值（高于此值认为是同一说话人）
+  similarity:
+    threshold: 0.75

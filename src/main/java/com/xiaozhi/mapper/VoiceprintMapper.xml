@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.VoiceprintMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysVoiceprint">
+        <id property="voiceprintId" column="voiceprintId" />
+        <result property="userId" column="userId" />
+        <result property="deviceId" column="deviceId" />
+        <result property="voiceprintName" column="voiceprintName" />
+        <result property="embedding" column="embedding" />
+        <result property="sampleCount" column="sampleCount" />
+        <result property="state" column="state" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="voiceprintId" parameterType="com.xiaozhi.entity.SysVoiceprint">
+        INSERT INTO sys_voiceprint (userId, deviceId, voiceprintName, embedding, sampleCount, state, createTime)
+        VALUES (#{userId}, #{deviceId}, #{voiceprintName}, #{embedding}, #{sampleCount}, #{state}, NOW())
+    </insert>
+
+    <update id="updateEmbedding">
+        UPDATE sys_voiceprint
+        SET embedding = #{embedding}, sampleCount = #{sampleCount}, updateTime = NOW()
+        WHERE voiceprintId = #{voiceprintId} AND state = '1'
+    </update>
+
+    <select id="selectByUserId" resultMap="BaseResultMap">
+        SELECT voiceprintId, userId, deviceId, voiceprintName, embedding, sampleCount, state, createTime, updateTime
+        FROM sys_voiceprint
+        WHERE userId = #{userId} AND state = '1'
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT voiceprintId, userId, deviceId, voiceprintName, embedding, sampleCount, state, createTime, updateTime
+        FROM sys_voiceprint
+        WHERE voiceprintId = #{voiceprintId} AND state = '1'
+    </select>
+
+    <select id="selectByDeviceUserId" resultMap="BaseResultMap">
+        SELECT v.voiceprintId, v.userId, v.deviceId, v.voiceprintName, v.embedding, v.sampleCount, v.state, v.createTime, v.updateTime
+        FROM sys_voiceprint v
+        INNER JOIN sys_device d ON d.userId = v.userId
+        WHERE d.deviceId = #{deviceId} AND v.state = '1'
+        ORDER BY v.createTime DESC
+    </select>
+
+    <select id="selectByUserIdAndName" resultMap="BaseResultMap">
+        SELECT voiceprintId, userId, deviceId, voiceprintName, embedding, sampleCount, state, createTime, updateTime
+        FROM sys_voiceprint
+        WHERE userId = #{userId} AND voiceprintName LIKE CONCAT('%', #{name}, '%') AND state = '1'
+    </select>
+
+    <update id="deleteById">
+        UPDATE sys_voiceprint
+        SET state = '0'
+        WHERE voiceprintId = #{voiceprintId} AND userId = #{userId}
+    </update>
+
+    <select id="countByUserId" resultType="int">
+        SELECT COUNT(*) FROM sys_voiceprint
+        WHERE userId = #{userId} AND state = '1'
+    </select>
+
+</mapper>
