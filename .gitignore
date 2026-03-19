@@ -35,3 +35,9 @@ application-local.properties
 datasets/
 .cursorrules
 .cursor/
+
+# Claude Code / OpenSpec
+.claude/
+.codex/
+openspec/
+CLAUDE.md
