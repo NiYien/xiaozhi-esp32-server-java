@@ -27,9 +27,14 @@ class DialogueHelper implements ChatConverter {
     // 最小句子长度（字符数）
     private static final int MIN_SENTENCE_LENGTH = 5;
 
+    // 首句加速模式的最小字符数（避免碎片化）
+    private static final int FIRST_SENTENCE_MIN_LENGTH = 2;
+
     final StringBuilder currentSentence = new StringBuilder(); // 当前句子的缓冲区
     final StringBuilder contextBuffer = new StringBuilder(); // 上下文缓冲区，用于检测数字中的小数点
 
+    // 首句是否已发出（首句加速模式标记）
+    private boolean firstSentenceEmitted = false;
 
     public DialogueHelper( ) {
 
@@ -79,12 +84,19 @@ class DialogueHelper implements ChatConverter {
                 }
             }
 
+            // 首句加速模式：首句未发出前，停顿标点也视为强断句信号（最小长度降低为FIRST_SENTENCE_MIN_LENGTH）
+            int effectiveMinLength = firstSentenceEmitted ? MIN_SENTENCE_LENGTH : FIRST_SENTENCE_MIN_LENGTH;
+
             // 判断是否应该发送当前句子
             if (isEndMark) {
                 // 句子结束标点是强断句信号
                 shouldSendSentence = true;
             } else if (isNewline) {
                 // 换行符也是强断句信号
+                shouldSendSentence = true;
+            } else if (!firstSentenceEmitted && isPauseMark
+                    && currentSentence.length() >= FIRST_SENTENCE_MIN_LENGTH) {
+                // 首句加速模式：停顿标点（逗号/分号）在首句中也作为强断句信号
                 shouldSendSentence = true;
             } else if ((isPauseMark || isEmoji || containsKaomoji)
                     && currentSentence.length() >= MIN_SENTENCE_LENGTH) {
@@ -93,16 +105,19 @@ class DialogueHelper implements ChatConverter {
             }
 
             // 如果应该发送句子，且当前句子长度满足要求
-            if (shouldSendSentence && currentSentence.length() >= MIN_SENTENCE_LENGTH) {
+            if (shouldSendSentence && currentSentence.length() >= effectiveMinLength) {
                 String sentence = currentSentence.toString().trim();
 
                 // 过滤颜文字
                 sentence = EmojiUtils.filterKaomoji(sentence);
 
-                if (containsSubstantialContent(sentence)) {
+                if (containsSubstantialContent(sentence, effectiveMinLength)) {
 
                     // 只有在onComplete中才会有最后一个句子
                     sink.next(sentence);
+
+                    // 标记首句已发出，后续恢复正常断句逻辑
+                    firstSentenceEmitted = true;
 
                     // 清空当前句子缓冲区
                     currentSentence.setLength(0);
@@ -130,7 +145,18 @@ class DialogueHelper implements ChatConverter {
      * @return 是否包含实质性内容
      */
     private boolean containsSubstantialContent(String text) {
-        if (text == null || text.trim().length() < MIN_SENTENCE_LENGTH) {
+        return containsSubstantialContent(text, MIN_SENTENCE_LENGTH);
+    }
+
+    /**
+     * 判断文本是否包含实质性内容（不仅仅是空白字符或标点符号）
+     *
+     * @param text 要检查的文本
+     * @param minLength 最小长度要求
+     * @return 是否包含实质性内容
+     */
+    private boolean containsSubstantialContent(String text, int minLength) {
+        if (text == null || text.trim().length() < minLength) {
             return false;
         }
 
