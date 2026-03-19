@@ -39,6 +39,9 @@ import java.util.concurrent.atomic.AtomicReference;
 public class ScheduledPlayer extends PlayerWithOpusFile {
     private static final Logger logger = LoggerFactory.getLogger(ScheduledPlayer.class);
 
+    // TTFS profiling 使用独立 Logger，可通过 logging.level.ttfs-profiling=OFF 关闭
+    private static final Logger ttfsLogger = LoggerFactory.getLogger("ttfs-profiling");
+
     // Opus帧发送间隔：60ms = 60,000,000 纳秒
     private static final long OPUS_FRAME_SEND_INTERVAL_NS = AudioUtils.OPUS_FRAME_DURATION_MS * 1_000_000L;
 
@@ -365,10 +368,16 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
     }
 
     /**
-     * 记录 TTFS（Time To First Speech）端到端指标日志。
-     * 从 VAD 检测到语音结束（speechEndAt）到首帧 Opus 发送的完整耗时，并分段记录各阶段耗时。
+     * 记录 TTFS（Time To First Speech）端到端指标日志（6 段耗时明细）。
+     * 通过 logging.level.ttfs-profiling 配置开关（INFO=开启，OFF=关闭）。
+     *
+     * 日志格式：
+     * TTFS: 2850ms | STT: 189ms | LLM-TTFT: 920ms | 首句累积: 180ms | STT→TTS: 1100ms | TTS首句: 450ms | 编码+发送: 570ms
      */
     private void logTtfs() {
+        if (!ttfsLogger.isInfoEnabled()) {
+            return;
+        }
         try {
             Instant speechEndAt = session.getSpeechEndAt();
             if (speechEndAt == null) {
@@ -378,30 +387,54 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
             Instant now = Instant.now();
             long ttfsMs = java.time.Duration.between(speechEndAt, now).toMillis();
 
-            // 分段耗时计算
+            // 获取所有时间戳
             Instant sttCompletedAt = session.getSttCompletedAt();
             Instant assistantFirstTokenAt = (this instanceof PlayerWithOpusFile playerWithOpus)
                     ? playerWithOpus.getAssistantMessageCreatedAt() : null;
+            Instant firstSentenceAt = session.getFirstSentenceAt();
+            Instant ttsFirstCompletedAt = session.getTtsFirstCompletedAt();
 
             StringBuilder sb = new StringBuilder();
             sb.append("TTFS: ").append(ttfsMs).append("ms");
 
+            // speechEndAt → sttCompletedAt: STT（说完话后到识别结果出来）
             if (sttCompletedAt != null) {
                 long sttMs = java.time.Duration.between(speechEndAt, sttCompletedAt).toMillis();
-                sb.append(" (STT: ").append(sttMs).append("ms");
-
-                if (assistantFirstTokenAt != null) {
-                    long llmTtftMs = java.time.Duration.between(sttCompletedAt, assistantFirstTokenAt).toMillis();
-                    long ttsAndSendMs = java.time.Duration.between(assistantFirstTokenAt, now).toMillis();
-                    sb.append(", LLM-TTFT: ").append(llmTtftMs).append("ms");
-                    sb.append(", TTS-首句+编码+发送: ").append(ttsAndSendMs).append("ms");
-                }
-
-                sb.append(")");
+                sb.append(" | STT: ").append(sttMs).append("ms");
             }
 
-            sb.append(" - SessionId: ").append(session.getSessionId());
-            logger.info(sb.toString());
+            // sttCompletedAt → assistantFirstTokenAt: LLM 首 token 延迟
+            if (sttCompletedAt != null && assistantFirstTokenAt != null) {
+                long llmTtftMs = java.time.Duration.between(sttCompletedAt, assistantFirstTokenAt).toMillis();
+                sb.append(" | LLM-TTFT: ").append(llmTtftMs).append("ms");
+            }
+
+            // assistantFirstTokenAt → firstSentenceAt: LLM token 累积到首句
+            if (assistantFirstTokenAt != null && firstSentenceAt != null) {
+                long sentenceMs = java.time.Duration.between(assistantFirstTokenAt, firstSentenceAt).toMillis();
+                sb.append(" | 首句累积: ").append(sentenceMs).append("ms");
+            }
+
+            // sttCompletedAt → firstSentenceAt: STT→TTS 合并指标（LLM 全部耗时）
+            if (sttCompletedAt != null && firstSentenceAt != null) {
+                long sttToTtsMs = java.time.Duration.between(sttCompletedAt, firstSentenceAt).toMillis();
+                sb.append(" | STT→TTS: ").append(sttToTtsMs).append("ms");
+            }
+
+            // firstSentenceAt → ttsFirstCompletedAt: TTS 首句合成
+            if (firstSentenceAt != null && ttsFirstCompletedAt != null) {
+                long ttsMs = java.time.Duration.between(firstSentenceAt, ttsFirstCompletedAt).toMillis();
+                sb.append(" | TTS首句: ").append(ttsMs).append("ms");
+            }
+
+            // ttsFirstCompletedAt → now: 编码+发送
+            if (ttsFirstCompletedAt != null) {
+                long encodeMs = java.time.Duration.between(ttsFirstCompletedAt, now).toMillis();
+                sb.append(" | 编码+发送: ").append(encodeMs).append("ms");
+            }
+
+            sb.append(" | SessionId: ").append(session.getSessionId());
+            ttfsLogger.info(sb.toString());
 
         } catch (Exception e) {
             logger.debug("TTFS指标记录失败: {}", e.getMessage());

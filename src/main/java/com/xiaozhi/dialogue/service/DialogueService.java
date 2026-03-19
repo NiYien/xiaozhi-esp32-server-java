@@ -192,6 +192,9 @@ public class DialogueService{
 
         Thread.startVirtualThread(() -> {
             try {
+                // 重置上一轮的 profiling 时间戳
+                session.resetProfilingTimestamps();
+
                 // 发送初始音频数据
                 if (initialAudio != null && initialAudio.length > 0) {
                     sessionManager.sendAudioData(sessionId, initialAudio);
@@ -205,6 +208,9 @@ public class DialogueService{
                 if (persona == null || persona.getSttService() == null) {
                     return;
                 }
+
+                // 记录 STT 调用开始时刻
+                session.setSttStartedAt(Instant.now());
 
                 // 1. STT识别（手动调用，不走persona.chat(audioFlux)，以便在STT和LLM之间插入意图检测）
                 String finalText = persona.getSttService().streamRecognition(

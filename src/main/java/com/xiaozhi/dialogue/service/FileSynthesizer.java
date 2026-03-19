@@ -8,8 +8,10 @@ import org.slf4j.LoggerFactory;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 语音合成器，用于非流式TTS（先生成完整音频文件再播放）。
@@ -57,8 +59,10 @@ public class FileSynthesizer extends Synthesizer {
     public void synthesize(Flux<String> stringFlux) {
         // 信号量控制并行 TTS 请求数量（滑动窗口）
         Semaphore ttsSemaphore = new Semaphore(TTS_PREFETCH_WINDOW);
+        // TTFS profiling: 标记是否已记录首句 TTS 完成时刻
+        AtomicBoolean firstTtsRecorded = new AtomicBoolean(false);
 
-        llmDisposable = new DialogueHelper().convert(stringFlux).subscribe(text -> {
+        llmDisposable = new DialogueHelper(chatSession).convert(stringFlux).subscribe(text -> {
             try {
                 // 获取信号量，限制并行 TTS 请求数
                 ttsSemaphore.acquire();
@@ -71,6 +75,10 @@ public class FileSynthesizer extends Synthesizer {
             CompletableFuture<Speech> ttsFuture = CompletableFuture.supplyAsync(() -> {
                 try {
                     String audioPath = ttsService.textToSpeech(text);
+                    // TTFS profiling: 记录首句 TTS 合成完成时刻
+                    if (firstTtsRecorded.compareAndSet(false, true)) {
+                        chatSession.setTtsFirstCompletedAt(Instant.now());
+                    }
                     if (audioPath != null) {
                         byte[] audioData = AudioUtils.readAsPcm(audioPath);
                         return new Speech(audioData, text);

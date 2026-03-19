@@ -370,6 +370,12 @@
             <artifactId>sherpa-onnx-java-api</artifactId>
             <version>1.0.1</version>
         </dependency>
+        <!-- 纯 Java MP3 解码库，用于 Edge TTS MP3→PCM 转换，无 native 依赖 -->
+        <dependency>
+            <groupId>javazoom</groupId>
+            <artifactId>jlayer</artifactId>
+            <version>1.0.1</version>
+        </dependency>
     </dependencies>
 
     <build>

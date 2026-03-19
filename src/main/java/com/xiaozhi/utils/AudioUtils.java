@@ -1,7 +1,5 @@
 package com.xiaozhi.utils;
 
-import org.bytedeco.ffmpeg.global.avutil;
-import org.bytedeco.javacv.FrameRecorder;
 import org.gagravarr.ogg.*;
 import org.gagravarr.opus.*;
 import org.slf4j.Logger;
@@ -26,7 +24,7 @@ public class AudioUtils {
     public static final int SAMPLE_RATE = 16000; // 采样率
     public static final int CHANNELS = 1; // 单声道
     public static final int BITRATE = 48000; // 48kbps比特率（高质量，接近透明质量）
-    public static final int SAMPLE_FORMAT = avutil.AV_SAMPLE_FMT_S16; // 16位PCM
+    public static final int SAMPLE_FORMAT = 1; // AV_SAMPLE_FMT_S16 = 16位PCM
     public static final int BUFFER_SIZE = 512; // 窗口大小
     public static final int OPUS_FRAME_DURATION_MS = 60; // OPUS帧持续时间（毫秒）
 
@@ -189,8 +187,6 @@ public class AudioUtils {
                 // 写入音频数据
                 dos.write(audioData);
             }
-        } catch (FrameRecorder.Exception e) {
-            logger.error("编码WAV时发生错误", e);
         } catch (IOException e) {
             logger.error("写入WAV文件时发生错误", e);
         }
@@ -440,11 +436,84 @@ public class AudioUtils {
     }
 
     /**
-     * 将MP3转换为PCM格式
+     * 在内存中将 MP3 字节数据解码为 PCM（16kHz/单声道/16bit）。
+     * 使用 JLayer 纯 Java 解码，无外部依赖。
+     *
+     * @param mp3Data MP3 音频字节数组
+     * @return PCM 数据字节数组（16kHz, 单声道, 16位有符号小端序）
+     */
+    public static byte[] mp3BytesToPcm(byte[] mp3Data) throws IOException {
+        try {
+            javazoom.jl.decoder.Bitstream bitstream = new javazoom.jl.decoder.Bitstream(new ByteArrayInputStream(mp3Data));
+            javazoom.jl.decoder.Decoder decoder = new javazoom.jl.decoder.Decoder();
+            ByteArrayOutputStream pcmOut = new ByteArrayOutputStream();
+
+            int mp3SampleRate = 0;
+            boolean firstFrame = true;
+            javazoom.jl.decoder.Header header;
+            while ((header = bitstream.readFrame()) != null) {
+                javazoom.jl.decoder.SampleBuffer sampleBuffer =
+                        (javazoom.jl.decoder.SampleBuffer) decoder.decodeFrame(header, bitstream);
+
+                short[] buffer = sampleBuffer.getBuffer();
+                int bufferLength = sampleBuffer.getBufferLength();
+                int channels = sampleBuffer.getChannelCount();
+                int frequency = sampleBuffer.getSampleFrequency();
+
+                if (firstFrame) {
+                    mp3SampleRate = frequency;
+                    logger.info("JLayer MP3 解码: 采样率={}Hz, 声道数={}, bufferLength={}, buffer.length={}",
+                            frequency, channels, bufferLength, buffer.length);
+                    firstFrame = false;
+                }
+
+                // bufferLength 是 buffer 中有效 short 数量（含所有声道交错数据）
+                // 单声道: bufferLength 个样本
+                // 立体声: bufferLength/2 个样本（左右交错）
+                int samplesPerChannel = (channels == 2) ? bufferLength / 2 : bufferLength;
+
+                ByteBuffer byteBuffer = ByteBuffer.allocate(samplesPerChannel * 2);
+                byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
+                if (channels == 2) {
+                    // 立体声：左右声道取平均
+                    for (int i = 0; i < bufferLength; i += 2) {
+                        int mixed = (buffer[i] + buffer[i + 1]) / 2;
+                        byteBuffer.putShort((short) mixed);
+                    }
+                } else {
+                    // 单声道：直接写入
+                    for (int i = 0; i < bufferLength; i++) {
+                        byteBuffer.putShort(buffer[i]);
+                    }
+                }
+                pcmOut.write(byteBuffer.array(), 0, byteBuffer.position());
+
+                bitstream.closeFrame();
+            }
+            bitstream.close();
+
+            byte[] pcmData = pcmOut.toByteArray();
+
+            // 如果 MP3 采样率不是 16kHz，进行重采样
+            if (mp3SampleRate > 0 && mp3SampleRate != SAMPLE_RATE) {
+                pcmData = resamplePcm(pcmData, mp3SampleRate, SAMPLE_RATE);
+            }
+
+            return pcmData;
+        } catch (Exception e) {
+            throw new IOException("JLayer MP3→PCM 解码失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 将MP3转换为PCM格式（使用外部 FFmpeg 进程，已废弃，建议使用 mp3BytesToPcm）
      *
      * @param mp3Path MP3文件路径
      * @return PCM数据字节数组
+     * @deprecated 使用 {@link #mp3BytesToPcm(byte[])} 替代
      */
+    @Deprecated
     public static byte[] mp3ToPcm(String mp3Path) throws IOException {
         try {
             // 创建临时PCM文件

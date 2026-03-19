@@ -122,9 +122,35 @@ public abstract class ChatSession {
     protected volatile Instant speechEndAt;
 
     /**
+     * STT 调用开始时刻
+     */
+    protected volatile Instant sttStartedAt;
+
+    /**
      * STT 完成时刻（用于 TTFS 分段耗时计算）
      */
     protected volatile Instant sttCompletedAt;
+
+    /**
+     * 首句分句完成时刻（DialogueHelper 首次 sink.next() 时记录）
+     */
+    protected volatile Instant firstSentenceAt;
+
+    /**
+     * TTS 首句合成完成时刻
+     */
+    protected volatile Instant ttsFirstCompletedAt;
+    /**
+     * 重置所有 TTFS profiling 时间戳，避免上一轮残留值干扰
+     */
+    public void resetProfilingTimestamps() {
+        this.speechEndAt = null;
+        this.sttStartedAt = null;
+        this.sttCompletedAt = null;
+        this.firstSentenceAt = null;
+        this.ttsFirstCompletedAt = null;
+    }
+
     /**
      * 会话属性存储
      */

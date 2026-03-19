@@ -1,9 +1,11 @@
 package com.xiaozhi.dialogue.service;
 
+import com.xiaozhi.communication.common.ChatSession;
 import com.xiaozhi.utils.EmojiUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
+import java.time.Instant;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -36,8 +38,15 @@ class DialogueHelper implements ChatConverter {
     // 首句是否已发出（首句加速模式标记）
     private boolean firstSentenceEmitted = false;
 
-    public DialogueHelper( ) {
+    // TTFS profiling: 用于记录首句分句时刻
+    private final ChatSession chatSession;
 
+    public DialogueHelper() {
+        this.chatSession = null;
+    }
+
+    public DialogueHelper(ChatSession chatSession) {
+        this.chatSession = chatSession;
     }
 
 
@@ -112,6 +121,11 @@ class DialogueHelper implements ChatConverter {
                 sentence = EmojiUtils.filterKaomoji(sentence);
 
                 if (containsSubstantialContent(sentence, effectiveMinLength)) {
+
+                    // TTFS profiling: 记录首句分句完成时刻
+                    if (!firstSentenceEmitted && chatSession != null) {
+                        chatSession.setFirstSentenceAt(Instant.now());
+                    }
 
                     // 只有在onComplete中才会有最后一个句子
                     sink.next(sentence);
