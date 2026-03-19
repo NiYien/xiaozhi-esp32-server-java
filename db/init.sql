@@ -115,6 +115,7 @@ CREATE TABLE `xiaozhi`.`sys_role` (
   `temperature` DOUBLE DEFAULT 0.7 COMMENT '温度参数',
   `topP` DOUBLE DEFAULT 1.0 COMMENT 'Top-P参数',
   `memoryType` enum('summary','window') DEFAULT 'window' COMMENT '记忆类型',
+  `comfort_words` JSON DEFAULT NULL COMMENT '安抚词列表，JSON数组格式，工具调用前随机播放一条安抚用户',
   `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-启用，0-禁用',
   `isDefault` enum('1','0') DEFAULT '0' COMMENT '是否默认角色：1-是，0-否',
   `userId` int NOT NULL COMMENT '创建人',

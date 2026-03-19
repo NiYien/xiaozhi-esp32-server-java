@@ -168,4 +168,10 @@ public class SysRole extends Base<SysRole> {
      */
     @Schema(description = "记忆类型")
     private String memoryType;
+
+    /**
+     * 安抚词列表（JSON数组），工具调用前随机播放一条安抚用户
+     */
+    @Schema(description = "安抚词列表，JSON数组格式")
+    private String comfortWords;
 }

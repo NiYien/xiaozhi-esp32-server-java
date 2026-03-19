@@ -9,7 +9,9 @@ import {
   DeleteOutlined,
   SnippetsOutlined,
   SoundOutlined,
-  PauseCircleOutlined
+  PauseCircleOutlined,
+  PlusOutlined,
+  MinusCircleOutlined
 } from '@ant-design/icons-vue'
 import { useRouter } from 'vue-router'
 import { useTable } from '@/composables/useTable'
@@ -80,7 +82,8 @@ const formData = reactive<RoleFormData>({
   gender: '',
   ttsPitch: 1.0,
   ttsSpeed: 1.0,
-  memoryType: 'window'
+  memoryType: 'window',
+  comfortWords: [] as string[]
 })
 
 // 编辑状态
@@ -256,7 +259,8 @@ const handleEdit = (record: Role) => {
       gender: voiceInfo?.gender || '',
       ttsPitch: record.ttsPitch ?? 1.0,
       ttsSpeed: record.ttsSpeed ?? 1.0,
-      memoryType: record.memoryType || 'window'
+      memoryType: record.memoryType || 'window',
+      comfortWords: parseComfortWords(record.comfortWords)
     })
 
     // 加载 MCP 工具列表
@@ -315,12 +319,17 @@ const handleSubmit = async () => {
     const voiceInfo = allAvailableVoices.value.find(v => v.value === formData.voiceName)
     const ttsId = voiceInfo?.ttsId || -1
     
+    // 过滤空安抚词
+    const filteredComfortWords = (formData.comfortWords || []).filter((w: string) => w.trim() !== '')
+
     const submitData = {
       ...formData,
       avatar: avatarUrl.value,
       // 将 isDefault 布尔值转换为字符串 '1' 或 '0'
       isDefault: formData.isDefault ? '1' : '0',
       ttsId: ttsId,
+      // 将安抚词数组转为 JSON 字符串
+      comfortWords: filteredComfortWords.length > 0 ? JSON.stringify(filteredComfortWords) : null,
     }
 
     if (editingRoleId.value) {
@@ -420,7 +429,8 @@ const resetForm = () => {
     gender: '',
     ttsPitch: 1.0,
     ttsSpeed: 1.0,
-    memoryType: 'window'
+    memoryType: 'window',
+    comfortWords: []
   })
 }
 
@@ -870,6 +880,46 @@ const filteredVoices = computed(() => {
 // 提供商切换：切换后清空已选音色
 const handleProviderChange = () => {
   formData.voiceName = undefined
+}
+
+// 解析安抚词（从后端返回的 JSON 字符串或数组）
+const parseComfortWords = (value: any): string[] => {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+// 默认安抚词列表
+const defaultComfortWords = [
+  '让我想想哦，请稍等一下。',
+  '好的，我来帮你处理。',
+  '请稍等，马上就好。',
+  '收到，我来看看。',
+  '稍等一下下，很快就好啦。'
+]
+
+// 添加安抚词
+const addComfortWord = () => {
+  formData.comfortWords = formData.comfortWords || []
+  formData.comfortWords.push('')
+}
+
+// 删除安抚词
+const removeComfortWord = (index: number) => {
+  formData.comfortWords?.splice(index, 1)
+}
+
+// 使用默认安抚词
+const useDefaultComfortWords = () => {
+  formData.comfortWords = [...defaultComfortWords]
 }
 
 // 初始化：并行加载所有数据（非阻塞式）
@@ -1496,6 +1546,43 @@ if (!editingRoleId.value) {
                   </a-select>
                   <div style="margin-top: 8px; color: var(--ant-color-text-tertiary); font-size: 12px">
                     {{ t('role.memoryTypeTip') }}
+                  </div>
+                </a-form-item>
+              </a-col>
+            </a-row>
+
+            <!-- 安抚词配置 -->
+            <a-divider orientation="left">安抚词配置</a-divider>
+
+            <a-row :gutter="20">
+              <a-col :span="24">
+                <a-form-item>
+                  <template #label>
+                    <span>安抚词</span>
+                    <a-tooltip title="工具调用执行前，系统会随机选择一条安抚词通过 TTS 播放给用户，让用户在等待时感到舒适。">
+                      <a-button type="link" size="small" style="padding: 0 4px;">?</a-button>
+                    </a-tooltip>
+                  </template>
+                  <div style="margin-bottom: 8px;">
+                    <a-button size="small" @click="useDefaultComfortWords">
+                      使用默认安抚词
+                    </a-button>
+                  </div>
+                  <div v-for="(word, index) in formData.comfortWords" :key="index" style="display: flex; align-items: center; margin-bottom: 8px;">
+                    <a-input
+                      v-model:value="formData.comfortWords![index]"
+                      placeholder="请输入安抚词，如：让我想想哦，请稍等一下。"
+                      style="flex: 1; margin-right: 8px;"
+                    />
+                    <a-button type="text" danger @click="removeComfortWord(index)">
+                      <minus-circle-outlined />
+                    </a-button>
+                  </div>
+                  <a-button type="dashed" block @click="addComfortWord">
+                    <plus-outlined /> 添加安抚词
+                  </a-button>
+                  <div style="margin-top: 8px; color: var(--ant-color-text-tertiary); font-size: 12px;">
+                    安抚词在工具调用（如搜索、播放音乐等）执行前播放，用于安抚等待中的用户。留空则不播放安抚词。
                   </div>
                 </a-form-item>
               </a-col>

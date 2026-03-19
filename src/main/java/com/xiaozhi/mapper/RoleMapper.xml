@@ -28,6 +28,7 @@
         <result property="ttsSpeed" column="ttsSpeed" />
         <result property="modelProvider" column="modelProvider" />
         <result property="ttsProvider" column="ttsProvider" />
+        <result property="comfortWords" column="comfort_words" />
     </resultMap>
 
     <sql id="Role_Column_List">
@@ -36,6 +37,7 @@
         sys_role.modelId, sys_role.sttId, sys_role.ttsId, sys_role.memoryType,
         sys_role.temperature, sys_role.topP,
         sys_role.vadSpeechTh, sys_role.vadSilenceTh, sys_role.vadEnergyTh, sys_role.vadSilenceMs,
+        sys_role.comfort_words,
         sys_role.userId, sys_role.state, sys_role.isDefault, sys_role.createTime
     </sql>
 
@@ -103,7 +105,8 @@
             <if test="vadSilenceMs != null and vadSilenceMs != ''">vadSilenceMs = #{vadSilenceMs},</if>
             <if test="ttsPitch != null and ttsPitch != ''">ttsPitch = #{ttsPitch},</if>
             <if test="ttsSpeed != null and ttsSpeed != ''">ttsSpeed = #{ttsSpeed},</if>
-            <if test="memoryType != null and memoryType != ''">memoryType = #{memoryType}</if>
+            <if test="memoryType != null and memoryType != ''">memoryType = #{memoryType},</if>
+            <if test="comfortWords != null">comfort_words = #{comfortWords}</if>
         </set>
         WHERE
             roleId = #{roleId}
@@ -120,7 +123,7 @@
     </update>
 
     <insert id="add" useGeneratedKeys="true" keyProperty="roleName" parameterType="com.xiaozhi.entity.SysRole">
-        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault ) VALUES (
+        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault, comfort_words ) VALUES (
             #{avatar},
             #{roleName},
             #{roleDesc},
@@ -140,7 +143,8 @@
             #{temperature},
             #{topP},
             #{userId},
-            #{isDefault}
+            #{isDefault},
+            #{comfortWords}
         )
     </insert>
 

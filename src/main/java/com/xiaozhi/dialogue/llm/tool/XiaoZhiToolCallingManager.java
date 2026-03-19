@@ -1,6 +1,9 @@
 package com.xiaozhi.dialogue.llm.tool;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xiaozhi.communication.common.ChatSession;
+import com.xiaozhi.dialogue.service.Persona;
 import io.micrometer.observation.ObservationRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -278,6 +281,9 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
 
         Boolean returnDirect = null;
 
+        // 工具执行前发送安抚词
+        sendComfortWord(toolContext);
+
         for (AssistantMessage.ToolCall toolCall : assistantMessage.getToolCalls()) {
 
             String toolName = toolCall.name();
@@ -379,6 +385,50 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
                     .properties(assistantMessage.getMetadata())
                     .toolCalls(assistantMessage.getToolCalls())
                     .build());
+        }
+    }
+
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final java.util.Random random = new java.util.Random();
+
+    /**
+     * 工具执行前发送安抚词。
+     * 从当前会话的角色配置中获取安抚词列表，随机选取一条通过 TTS 播放给用户，
+     * 让用户在工具执行等待期间感到舒适。
+     */
+    private void sendComfortWord(ToolContext toolContext) {
+        try {
+            Object sessionObj = toolContext.getContext().get("session");
+            if (!(sessionObj instanceof ChatSession chatSession)) {
+                return;
+            }
+
+            Persona persona = chatSession.getPersona();
+            if (persona == null || persona.getConversation() == null) {
+                return;
+            }
+
+            String comfortWordsJson = persona.getConversation().getRole().getComfortWords();
+            if (comfortWordsJson == null || comfortWordsJson.isBlank()) {
+                return;
+            }
+
+            List<String> comfortWords = objectMapper.readValue(comfortWordsJson, new TypeReference<List<String>>() {});
+            if (comfortWords.isEmpty()) {
+                return;
+            }
+
+            // 随机选择一条安抚词
+            String comfortWord = comfortWords.get(random.nextInt(comfortWords.size()));
+            logger.info("工具调用前发送安抚词: {}", comfortWord);
+
+            // 通过 Synthesizer 合成并播放安抚词
+            if (persona.getSynthesizer() != null) {
+                persona.getSynthesizer().synthesize(comfortWord);
+            }
+        } catch (Exception e) {
+            // 安抚词发送失败不影响工具执行
+            logger.warn("发送安抚词失败: {}", e.getMessage());
         }
     }
 

@@ -44,6 +44,7 @@ export interface Role {
   ttsPitch?: number // 语音音调(0.5-2.0)
   ttsSpeed?: number // 语音语速(0.5-2.0)
   memoryType?: MemoryType // 记忆类型
+  comfortWords?: string[] // 安抚词列表
 }
 
 import type { BaseQueryParams } from './api'
@@ -120,6 +121,8 @@ export interface RoleFormData {
   ttsSpeed?: number
   // 记忆类型
   memoryType?: MemoryType
+  // 安抚词
+  comfortWords?: string[]
 }
 
 // 测试语音参数
