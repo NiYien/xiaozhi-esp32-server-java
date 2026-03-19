@@ -23,4 +23,9 @@ public interface RoleMapper {
   SysRole selectRoleById(Integer roleId);
 
   int deleteById(@Param("roleId") Integer roleId);
+
+  /**
+   * 清除指定voiceName的角色引用（音色克隆删除时调用）
+   */
+  int clearVoiceName(@Param("voiceName") String voiceName);
 }

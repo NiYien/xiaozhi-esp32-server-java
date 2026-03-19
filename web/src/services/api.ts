@@ -66,6 +66,12 @@ export default {
     delete: '/firmware',
     setDefault: '/firmware',
   },
+  voiceClone: {
+    upload: '/api/voice-clone/upload',
+    list: '/api/voice-clone/list',
+    delete: '/api/voice-clone',
+    preview: '/api/voice-clone/preview',
+  },
   upload: '/api/file/upload',
   memory: {
     summary: '/memory/summary',

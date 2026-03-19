@@ -200,6 +200,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'config/voice-clone',
+        name: 'config-voice-clone',
+        component: () => import('../views/VoiceCloneView.vue'),
+        meta: {
+          title: 'router.title.voiceClone',
+          parent: 'router.parent.configManagement',
+          requiresAuth: true,
+          permission: 'system:config:tts',
+        },
+      },
+      {
         path: 'config/firmware',
         name: 'config-firmware',
         component: () => import('../views/config/FirmwareView.vue'),

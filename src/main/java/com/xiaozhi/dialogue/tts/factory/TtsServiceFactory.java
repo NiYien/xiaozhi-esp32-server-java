@@ -3,12 +3,16 @@ package com.xiaozhi.dialogue.tts.factory;
 import com.xiaozhi.dialogue.token.TokenService;
 import com.xiaozhi.dialogue.token.factory.TokenServiceFactory;
 import com.xiaozhi.dialogue.tts.TtsService;
+import com.xiaozhi.dialogue.tts.clone.VoiceCloneManager;
 import com.xiaozhi.dialogue.tts.providers.*;
 import com.xiaozhi.entity.SysConfig;
+import com.xiaozhi.entity.SysVoiceClone;
+import com.xiaozhi.service.SysConfigService;
 
 import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.util.ObjectUtils;
 
@@ -26,6 +30,13 @@ public class TtsServiceFactory {
 
     @Resource
     private TokenServiceFactory tokenServiceFactory;
+
+    @Lazy
+    @Resource
+    private VoiceCloneManager voiceCloneManager;
+
+    @Resource
+    private SysConfigService configService;
 
     // 语音生成文件保存地址
     public static final String OUTPUT_PATH = "audio/";
@@ -53,16 +64,57 @@ public class TtsServiceFactory {
         return provider + ":" + configId + ":" + voiceName + ":" + pitch + ":" + speed;
     }
 
+    /** clone: 前缀，标识克隆音色 */
+    private static final String CLONE_PREFIX = "clone:";
+
     /**
      * 根据配置获取TTS服务（带pitch和speed参数）
+     * 支持 clone: 前缀检测，自动查询克隆音色的 voiceId 和 provider
      */
     public TtsService getTtsService(SysConfig config, String voiceName, Float pitch, Float speed) {
+        // 检测 clone: 前缀
+        if (voiceName != null && voiceName.startsWith(CLONE_PREFIX)) {
+            return resolveCloneTtsService(config, voiceName, pitch, speed);
+        }
+
         final SysConfig finalConfig = !ObjectUtils.isEmpty(config) ? config : new SysConfig().setProvider(DEFAULT_PROVIDER);
         String provider = finalConfig.getProvider();
         String cacheKey = createCacheKey(finalConfig, provider, voiceName, pitch, speed);
 
         // 使用 computeIfAbsent 确保原子性操作，避免并发创建多个实例
         return serviceCache.computeIfAbsent(cacheKey, k -> createApiService(finalConfig, voiceName, pitch, speed));
+    }
+
+    /**
+     * 解析 clone: 前缀的音色，查询克隆记录获取实际 voiceId 和 provider
+     * 克隆音色被删除或未就绪时回退到 Provider 默认音色
+     */
+    private TtsService resolveCloneTtsService(SysConfig config, String voiceName, Float pitch, Float speed) {
+        try {
+            String cloneIdStr = voiceName.substring(CLONE_PREFIX.length());
+            Integer cloneId = Integer.parseInt(cloneIdStr);
+            SysVoiceClone voiceClone = voiceCloneManager.getById(cloneId);
+
+            if (voiceClone == null || !"ready".equals(voiceClone.getStatus()) || voiceClone.getVoiceId() == null) {
+                logger.warn("克隆音色不可用(cloneId={})，回退到默认音色", cloneId);
+                return getDefaultTtsService();
+            }
+
+            // 使用克隆音色的 configId 获取实际的 TTS 配置
+            SysConfig cloneConfig = configService.selectConfigById(voiceClone.getConfigId());
+            if (cloneConfig == null) {
+                logger.warn("克隆音色对应的TTS配置不存在(configId={})，回退到默认音色", voiceClone.getConfigId());
+                return getDefaultTtsService();
+            }
+
+            // 使用克隆音色的 voiceId 创建 TTS 服务
+            String actualVoiceId = voiceClone.getVoiceId();
+            String cacheKey = createCacheKey(cloneConfig, cloneConfig.getProvider(), actualVoiceId, pitch, speed);
+            return serviceCache.computeIfAbsent(cacheKey, k -> createApiService(cloneConfig, actualVoiceId, pitch, speed));
+        } catch (NumberFormatException e) {
+            logger.error("无效的克隆音色ID: {}", voiceName);
+            return getDefaultTtsService();
+        }
     }
 
     /**
