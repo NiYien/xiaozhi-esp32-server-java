@@ -62,6 +62,7 @@ export default {
   upload: '/api/file/upload',
   memory: {
     summary: '/memory/summary',
+    long: '/memory/long',
   },
 }
 

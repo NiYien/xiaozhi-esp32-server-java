@@ -3,6 +3,7 @@ package com.xiaozhi.dialogue.llm.memory;
 import com.xiaozhi.entity.SysDevice;
 import com.xiaozhi.entity.SysRole;
 import lombok.Getter;
+import lombok.Setter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.*;
@@ -39,6 +40,13 @@ public class Conversation extends ConversationIdentifier {
     @Getter
     private final SysRole role;
     private final String sessionId;
+
+    /**
+     * 用户长期记忆文本，由外部注入，用于添加到系统提示词中
+     */
+    @Setter
+    @Getter
+    private String userMemoryText;
 
     protected List<Message> messages = new ArrayList<>();
     public static final DateTimeFormatter LOCAL_DATE_TIME = new DateTimeFormatterBuilder()
@@ -97,6 +105,10 @@ public class Conversation extends ConversationIdentifier {
             msgBuilder.append("当前位置：").append(deviceLocation)
                     .append("。如果用户提及现在在哪里，则以新地方为准。")
                     .append(System.lineSeparator());
+        }
+        // 注入用户长期记忆
+        if (StringUtils.hasText(userMemoryText)) {
+            msgBuilder.append(System.lineSeparator()).append(userMemoryText);
         }
         msgBuilder.append("当前时间：").append(LocalDateTime.now().format(LOCAL_DATE_TIME));
         if(StringUtils.hasText(roleDesc)) {

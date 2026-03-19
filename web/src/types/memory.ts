@@ -40,6 +40,19 @@ export interface MemoryQueryParams {
 }
 
 /**
+ * 用户长期记忆
+ */
+export interface UserMemory {
+  memoryId: number
+  userId: number
+  category: 'preference' | 'fact' | 'habit' | 'relationship' | 'other'
+  content: string
+  state: string
+  createTime: string
+  updateTime: string
+}
+
+/**
  * 记忆管理视图的状态
  */
 export interface MemoryManagementState {

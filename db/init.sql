@@ -357,4 +357,19 @@ UPDATE `xiaozhi`.`sys_user` SET `roleId` = 1 WHERE `username` = 'admin';
 -- 将其他用户设为普通用户角色
 UPDATE `xiaozhi`.`sys_user` SET `roleId` = 2 WHERE `username` != 'admin';
 
+-- 创建用户长期记忆表
+DROP TABLE IF EXISTS `xiaozhi`.`sys_user_memory`;
+CREATE TABLE `xiaozhi`.`sys_user_memory` (
+  `memoryId` bigint NOT NULL AUTO_INCREMENT COMMENT '记忆ID，主键',
+  `userId` int NOT NULL COMMENT '用户ID，记忆按用户存储，跨设备跨角色共享',
+  `category` varchar(20) NOT NULL DEFAULT 'other' COMMENT '记忆分类：preference-偏好，fact-事实，habit-习惯，relationship-关系，other-其他',
+  `content` varchar(500) NOT NULL COMMENT '记忆内容',
+  `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-有效，0-删除',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updateTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`memoryId`),
+  KEY `idx_userId` (`userId`),
+  KEY `idx_category` (`category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户长期记忆表';
+
 SET FOREIGN_KEY_CHECKS = 1;

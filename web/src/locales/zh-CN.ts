@@ -744,6 +744,15 @@ export default {
     summary: '摘要',
     content: '内容',
     confirmDelete: '确定要删除该记忆吗？此操作不可恢复。',
+    longTermMemory: '长期记忆',
+    category: '分类',
+    categoryPreference: '偏好',
+    categoryFact: '个人信息',
+    categoryHabit: '习惯',
+    categoryRelationship: '人际关系',
+    categoryOther: '其他',
+    editMemory: '编辑记忆',
+    contentRequired: '请输入记忆内容',
   },
 }
 

@@ -13,13 +13,16 @@ import { deleteMessage } from '@/services/message'
 import {
   querySummaryMemory,
   queryChatMemory,
-  deleteSummaryMemory
+  deleteSummaryMemory,
+  queryUserMemory,
+  deleteUserMemory,
+  updateUserMemory
 } from '@/services/memory'
 import AudioPlayer from '@/components/AudioPlayer.vue'
 import TableActionButtons from '@/components/TableActionButtons.vue'
 import type { Role } from '@/types/role'
 import type { Device } from '@/types/device'
-import type { SummaryMemory, ChatMemory } from '@/types/memory'
+import type { SummaryMemory, ChatMemory, UserMemory } from '@/types/memory'
 import dayjs, { Dayjs } from 'dayjs'
 import { useEventBus } from '@vueuse/core'
 
@@ -45,7 +48,7 @@ const {
   pagination,
   handleTableChange,
   loadData,
-} = useTable<SummaryMemory | ChatMemory>()
+} = useTable<SummaryMemory | ChatMemory | UserMemory>()
 
 // 使用导出 composable
 const { exporting, exportToExcel } = useExport()
@@ -86,8 +89,56 @@ const selectedDeviceName = computed(() => {
   return devices.value.find((d: Device) => d.deviceId === selectedDeviceId.value)?.deviceName || selectedDeviceId.value
 })
 
+// 长期记忆分类筛选
+const selectedCategory = ref<string>('')
+const categoryOptions = computed(() => [
+  { label: t('common.all'), value: '' },
+  { label: t('memory.categoryPreference'), value: 'preference' },
+  { label: t('memory.categoryFact'), value: 'fact' },
+  { label: t('memory.categoryHabit'), value: 'habit' },
+  { label: t('memory.categoryRelationship'), value: 'relationship' },
+  { label: t('memory.categoryOther'), value: 'other' },
+])
+
+// 长期记忆编辑相关
+const editModalVisible = ref(false)
+const editingMemory = ref<{ memoryId: number; content: string; category: string }>({
+  memoryId: 0,
+  content: '',
+  category: 'other',
+})
+
 // 表格列配置
 const columns = computed(() => {
+  if (memoryType.value === 'long') {
+    return [
+      {
+        title: t('message.conversationTime'),
+        dataIndex: 'createTime',
+        width: 180,
+        align: 'center' as const,
+      },
+      {
+        title: t('memory.category'),
+        dataIndex: 'category',
+        width: 100,
+        align: 'center' as const,
+      },
+      {
+        title: t('memory.content'),
+        dataIndex: 'content',
+        width: 400,
+        align: 'center' as const,
+      },
+      {
+        title: t('table.action'),
+        dataIndex: 'operation',
+        width: 140,
+        fixed: 'right' as const,
+        align: 'center' as const,
+      },
+    ]
+  }
 
   const baseColumns = [
     {
@@ -164,6 +215,12 @@ const columns = computed(() => {
  * 初始化下拉数据并加载表格
  */
 async function initSelects() {
+  if (memoryType.value === 'long') {
+    // 长期记忆不需要角色和设备下拉
+    await fetchMemoryData()
+    return
+  }
+
   await Promise.all([loadRoles(), loadDevices()])
 
   const needDefault = memoryType.value === 'summary'
@@ -228,6 +285,15 @@ async function fetchMemoryData() {
       }))
     } else if (memoryType.value === 'summary') {
       await loadData(() => querySummaryMemory(params))
+    } else if (memoryType.value === 'long') {
+      const longParams: any = {
+        start: pagination.current || 1,
+        limit: pagination.pageSize || 10,
+      }
+      if (selectedCategory.value) {
+        longParams.category = selectedCategory.value
+      }
+      await loadData(() => queryUserMemory(longParams))
     }
   } catch (error) {
     console.error('加载记忆数据失败:', error)
@@ -245,6 +311,8 @@ async function handleDeleteMemory(record: any) {
     if (memoryType.value === 'summary') {
       // 对于summary，使用id（createTime的毫秒数）删除指定条
       res = await deleteSummaryMemory(selectedRoleId.value, selectedDeviceId.value, record.id)
+    } else if (memoryType.value === 'long') {
+      res = await deleteUserMemory(record.memoryId)
     }
 
     if (res?.code === 200) {
@@ -270,6 +338,13 @@ async function handleDeviceChange(deviceId: string) {
 }
 
 /**
+ * 处理分类切换
+ */
+async function handleCategoryChange() {
+  await fetchMemoryData()
+}
+
+/**
  * 处理分页变化
  */
 const onTableChange = (pag: TablePaginationConfig) => {
@@ -282,6 +357,34 @@ const onTableChange = (pag: TablePaginationConfig) => {
  */
 function getSenderText(sender: string) {
   return sender === 'user' ? t('message.user') : t('message.assistant')
+}
+
+/**
+ * 获取分类显示文本
+ */
+function getCategoryText(category: string) {
+  const map: Record<string, string> = {
+    preference: t('memory.categoryPreference'),
+    fact: t('memory.categoryFact'),
+    habit: t('memory.categoryHabit'),
+    relationship: t('memory.categoryRelationship'),
+    other: t('memory.categoryOther'),
+  }
+  return map[category] || category
+}
+
+/**
+ * 获取分类标签颜色
+ */
+function getCategoryColor(category: string) {
+  const map: Record<string, string> = {
+    preference: 'blue',
+    fact: 'green',
+    habit: 'orange',
+    relationship: 'purple',
+    other: 'default',
+  }
+  return map[category] || 'default'
 }
 
 /**
@@ -325,6 +428,48 @@ async function handleDeleteMessage(record: any) {
 }
 
 /**
+ * 打开编辑弹窗
+ */
+function handleEditMemory(record: any) {
+  editingMemory.value = {
+    memoryId: record.memoryId,
+    content: record.content,
+    category: record.category,
+  }
+  editModalVisible.value = true
+}
+
+/**
+ * 保存编辑的记忆
+ */
+async function handleSaveMemory() {
+  if (!editingMemory.value.content.trim()) {
+    antMessage.warning(t('memory.contentRequired'))
+    return
+  }
+  loading.value = true
+  try {
+    const res = await updateUserMemory(
+      editingMemory.value.memoryId,
+      editingMemory.value.content,
+      editingMemory.value.category
+    )
+    if (res?.code === 200) {
+      antMessage.success(t('common.saveSuccess'))
+      editModalVisible.value = false
+      await fetchMemoryData()
+    } else {
+      antMessage.error(res?.message || t('common.saveFailed'))
+    }
+  } catch (error) {
+    console.error('保存记忆失败:', error)
+    antMessage.error(t('common.saveFailed'))
+  } finally {
+    loading.value = false
+  }
+}
+
+/**
  * 导出当前数据
  */
 async function handleExport() {
@@ -355,6 +500,13 @@ async function handleExport() {
       columns = [
         { key: 'deviceName', title: t('device.deviceName') },
         { key: 'summary', title: t('memory.summary') },
+        { key: 'createTime', title: t('message.conversationTime') }
+      ]
+    } else if (memoryType.value === 'long') {
+      filename = `long_memory_${dayjs().format('YYYY-MM-DD_HH-mm-ss')}`
+      columns = [
+        { key: 'category', title: t('memory.category'), format: getCategoryText },
+        { key: 'content', title: t('memory.content') },
         { key: 'createTime', title: t('message.conversationTime') }
       ]
     }
@@ -394,62 +546,85 @@ onMounted(async () => {
     <!-- 筛选栏 -->
     <a-card :bordered="false" style="margin-bottom: 16px" class="search-card">
       <a-row :gutter="16">
-        <a-col :span="8">
-          <a-form-item :label="t('role.roleName')">
-            <a-select
-              v-model:value="selectedRoleId"
-              show-search
-              :filter-option="filterRoleOption"
-              :loading="rolesLoading"
-              @change="handleRoleChange"
-              @popup-scroll="onRolePopupScroll"
-            >
-              <a-select-option v-if="memoryType === 'chat'" :value="0">
-                {{ t('common.all') }}
-              </a-select-option>
-              <a-select-option
-                v-for="role in roles"
-                :key="role.roleId"
-                :value="role.roleId"
+        <!-- 长期记忆：只有分类筛选 -->
+        <template v-if="memoryType === 'long'">
+          <a-col :span="8">
+            <a-form-item :label="t('memory.category')">
+              <a-select
+                v-model:value="selectedCategory"
+                @change="handleCategoryChange"
               >
-                {{ role.roleName }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
-        <a-col :span="8">
-          <a-form-item :label="t('device.deviceName')">
-            <a-select
-              v-model:value="selectedDeviceId"
-              :loading="devicesLoading"
-              @change="handleDeviceChange"
-              @popup-scroll="onDevicePopupScroll"
-            >
-              <a-select-option v-if="memoryType === 'chat'" value="">
-                {{ t('common.all') }}
-              </a-select-option>
-              <a-select-option
-                v-for="device in devices"
-                :key="device.deviceId"
-                :value="device.deviceId"
-              >
-                {{ device.deviceName }}
-              </a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-col>
+                <a-select-option
+                  v-for="opt in categoryOptions"
+                  :key="opt.value"
+                  :value="opt.value"
+                >
+                  {{ opt.label }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </template>
 
-        <a-col v-if="memoryType === 'chat'" :span="8">
-          <a-form-item :label="t('message.conversationDate')">
-            <a-range-picker
-              v-model:value="timeRange"
-              :presets="rangePresets"
-              :allow-clear="false"
-              format="MM-DD"
-              @change="fetchMemoryData"
-            />
-          </a-form-item>
-        </a-col>
+        <!-- 短期/摘要记忆：角色和设备筛选 -->
+        <template v-else>
+          <a-col :span="8">
+            <a-form-item :label="t('role.roleName')">
+              <a-select
+                v-model:value="selectedRoleId"
+                show-search
+                :filter-option="filterRoleOption"
+                :loading="rolesLoading"
+                @change="handleRoleChange"
+                @popup-scroll="onRolePopupScroll"
+              >
+                <a-select-option v-if="memoryType === 'chat'" :value="0">
+                  {{ t('common.all') }}
+                </a-select-option>
+                <a-select-option
+                  v-for="role in roles"
+                  :key="role.roleId"
+                  :value="role.roleId"
+                >
+                  {{ role.roleName }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="8">
+            <a-form-item :label="t('device.deviceName')">
+              <a-select
+                v-model:value="selectedDeviceId"
+                :loading="devicesLoading"
+                @change="handleDeviceChange"
+                @popup-scroll="onDevicePopupScroll"
+              >
+                <a-select-option v-if="memoryType === 'chat'" value="">
+                  {{ t('common.all') }}
+                </a-select-option>
+                <a-select-option
+                  v-for="device in devices"
+                  :key="device.deviceId"
+                  :value="device.deviceId"
+                >
+                  {{ device.deviceName }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+
+          <a-col v-if="memoryType === 'chat'" :span="8">
+            <a-form-item :label="t('message.conversationDate')">
+              <a-range-picker
+                v-model:value="timeRange"
+                :presets="rangePresets"
+                :allow-clear="false"
+                format="MM-DD"
+                @change="fetchMemoryData"
+              />
+            </a-form-item>
+          </a-col>
+        </template>
       </a-row>
     </a-card>
 
@@ -457,7 +632,7 @@ onMounted(async () => {
     <a-card :bordered="false">
       <template #title>
         <a-space>
-          <span>{{ t(`router.title.${memoryType === 'chat' ? 'shortTermMemory' : 'summaryMemory'}`) }}</span>
+          <span>{{ memoryType === 'long' ? t('memory.longTermMemory') : t(`router.title.${memoryType === 'chat' ? 'shortTermMemory' : 'summaryMemory'}`) }}</span>
         </a-space>
       </template>
       <template #extra>
@@ -590,7 +765,82 @@ onMounted(async () => {
           </template>
         </template>
       </a-table>
+
+      <!-- 长期记忆表格 -->
+      <a-table
+        v-else-if="memoryType === 'long'"
+        row-key="memoryId"
+        :columns="columns"
+        :data-source="data"
+        :loading="loading"
+        :pagination="pagination"
+        :scroll="{ x: 800 }"
+        size="middle"
+        @change="onTableChange"
+      >
+        <template #bodyCell="{ column, record }">
+          <!-- 分类列 -->
+          <template v-if="column.dataIndex === 'category'">
+            <a-tag :color="getCategoryColor(record.category)">
+              {{ getCategoryText(record.category) }}
+            </a-tag>
+          </template>
+
+          <!-- 内容列 -->
+          <template v-else-if="column.dataIndex === 'content'">
+            <a-tooltip :title="record.content" :mouse-enter-delay="0.5" placement="topLeft">
+              <span v-if="record.content" class="ellipsis-text">{{ record.content }}</span>
+              <span v-else>-</span>
+            </a-tooltip>
+          </template>
+
+          <!-- 操作列 -->
+          <template v-else-if="column.dataIndex === 'operation'">
+            <a-space>
+              <a-button type="link" size="small" @click="handleEditMemory(record)">
+                {{ t('common.edit') }}
+              </a-button>
+              <a-popconfirm
+                :title="t('memory.confirmDelete')"
+                @confirm="handleDeleteMemory(record)"
+              >
+                <a-button type="link" danger size="small">
+                  {{ t('common.delete') }}
+                </a-button>
+              </a-popconfirm>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
     </a-card>
+
+    <!-- 编辑记忆弹窗 -->
+    <a-modal
+      v-model:open="editModalVisible"
+      :title="t('memory.editMemory')"
+      @ok="handleSaveMemory"
+      :confirm-loading="loading"
+    >
+      <a-form layout="vertical">
+        <a-form-item :label="t('memory.category')">
+          <a-select v-model:value="editingMemory.category">
+            <a-select-option value="preference">{{ t('memory.categoryPreference') }}</a-select-option>
+            <a-select-option value="fact">{{ t('memory.categoryFact') }}</a-select-option>
+            <a-select-option value="habit">{{ t('memory.categoryHabit') }}</a-select-option>
+            <a-select-option value="relationship">{{ t('memory.categoryRelationship') }}</a-select-option>
+            <a-select-option value="other">{{ t('memory.categoryOther') }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item :label="t('memory.content')">
+          <a-textarea
+            v-model:value="editingMemory.content"
+            :rows="4"
+            :maxlength="500"
+            show-count
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
     <!-- 回到顶部 -->
     <a-back-top />
