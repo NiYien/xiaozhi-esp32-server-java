@@ -155,6 +155,21 @@ sa-token:
   jwt-secret-key: xiaozhi-esp32-server-java-jwt-secret-key
 
 # ============================================================
+# MQTT 配置（默认关闭）
+# ============================================================
+xiaozhi:
+  mqtt:
+    enabled: false
+    broker-url: tcp://localhost:1883
+    client-id-prefix: xiaozhi-server
+    topic-prefix: xiaozhi
+    connection-timeout: 10
+    keep-alive-interval: 60
+    automatic-reconnect: true
+    max-reconnect-delay: 30
+    clean-start: true
+
+# ============================================================
 # 自定义配置
 # ============================================================
 # 是否定时关闭不活跃的会话（秒）
