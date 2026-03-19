@@ -48,6 +48,13 @@ public class Conversation extends ConversationIdentifier {
     @Getter
     private String userMemoryText;
 
+    /**
+     * RAG 知识库上下文文本，由外部注入，用于添加到系统提示词中
+     */
+    @Setter
+    @Getter
+    private String knowledgeContext;
+
     protected List<Message> messages = new ArrayList<>();
     public static final DateTimeFormatter LOCAL_DATE_TIME = new DateTimeFormatterBuilder()
             .parseCaseInsensitive()
@@ -109,6 +116,10 @@ public class Conversation extends ConversationIdentifier {
         // 注入用户长期记忆
         if (StringUtils.hasText(userMemoryText)) {
             msgBuilder.append(System.lineSeparator()).append(userMemoryText);
+        }
+        // 注入 RAG 知识库上下文
+        if (StringUtils.hasText(knowledgeContext)) {
+            msgBuilder.append(System.lineSeparator()).append(knowledgeContext);
         }
         msgBuilder.append("当前时间：").append(LocalDateTime.now().format(LOCAL_DATE_TIME));
         if(StringUtils.hasText(roleDesc)) {

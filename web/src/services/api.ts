@@ -77,6 +77,17 @@ export default {
     activeDevices: '/monitor/active-devices',
     latency: '/monitor/latency',
   },
+  knowledge: {
+    baseQuery: '/api/knowledge/base',
+    baseAdd: '/api/knowledge/base',
+    baseUpdate: '/api/knowledge/base',
+    baseDelete: '/api/knowledge/base',
+    docQuery: '/api/knowledge/doc',
+    docUpload: '/api/knowledge/doc/upload',
+    docDelete: '/api/knowledge/doc',
+    docReprocess: '/api/knowledge/doc',
+    docStatus: '/api/knowledge/doc',
+  },
 }
 
 

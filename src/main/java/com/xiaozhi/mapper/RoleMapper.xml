@@ -29,6 +29,9 @@
         <result property="modelProvider" column="modelProvider" />
         <result property="ttsProvider" column="ttsProvider" />
         <result property="comfortWords" column="comfort_words" />
+        <result property="knowledgeBaseIds" column="knowledgeBaseIds" />
+        <result property="ragTopK" column="ragTopK" />
+        <result property="ragThreshold" column="ragThreshold" />
     </resultMap>
 
     <sql id="Role_Column_List">
@@ -38,6 +41,7 @@
         sys_role.temperature, sys_role.topP,
         sys_role.vadSpeechTh, sys_role.vadSilenceTh, sys_role.vadEnergyTh, sys_role.vadSilenceMs,
         sys_role.comfort_words,
+        sys_role.knowledgeBaseIds, sys_role.ragTopK, sys_role.ragThreshold,
         sys_role.userId, sys_role.state, sys_role.isDefault, sys_role.createTime
     </sql>
 
@@ -106,7 +110,10 @@
             <if test="ttsPitch != null and ttsPitch != ''">ttsPitch = #{ttsPitch},</if>
             <if test="ttsSpeed != null and ttsSpeed != ''">ttsSpeed = #{ttsSpeed},</if>
             <if test="memoryType != null and memoryType != ''">memoryType = #{memoryType},</if>
-            <if test="comfortWords != null">comfort_words = #{comfortWords}</if>
+            <if test="comfortWords != null">comfort_words = #{comfortWords},</if>
+            <if test="knowledgeBaseIds != null">knowledgeBaseIds = #{knowledgeBaseIds},</if>
+            <if test="ragTopK != null">ragTopK = #{ragTopK},</if>
+            <if test="ragThreshold != null">ragThreshold = #{ragThreshold},</if>
         </set>
         WHERE
             roleId = #{roleId}
@@ -123,7 +130,7 @@
     </update>
 
     <insert id="add" useGeneratedKeys="true" keyProperty="roleName" parameterType="com.xiaozhi.entity.SysRole">
-        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault, comfort_words ) VALUES (
+        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault, comfort_words, knowledgeBaseIds, ragTopK, ragThreshold ) VALUES (
             #{avatar},
             #{roleName},
             #{roleDesc},
@@ -144,7 +151,10 @@
             #{topP},
             #{userId},
             #{isDefault},
-            #{comfortWords}
+            #{comfortWords},
+            #{knowledgeBaseIds},
+            #{ragTopK},
+            #{ragThreshold}
         )
     </insert>
 

@@ -158,10 +158,28 @@ public class SysRole extends Base<SysRole> {
     private Integer totalDevice;
 
     /**
-     * 知识库ID
+     * 知识库ID（旧字段，保留兼容）
      */
     @Schema(description = "知识库ID")
-    private String datasetId ;
+    private String datasetId;
+
+    /**
+     * 关联的知识库ID列表，逗号分隔
+     */
+    @Schema(description = "关联的知识库ID列表，逗号分隔")
+    private String knowledgeBaseIds;
+
+    /**
+     * RAG 检索返回条数（覆盖全局配置），为 null 时使用全局配置
+     */
+    @Schema(description = "RAG 检索返回条数")
+    private Integer ragTopK;
+
+    /**
+     * RAG 相似度阈值（覆盖全局配置），为 null 时使用全局配置
+     */
+    @Schema(description = "RAG 相似度阈值")
+    private Double ragThreshold;
 
     /**
      * 记忆类型

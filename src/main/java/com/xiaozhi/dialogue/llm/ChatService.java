@@ -5,6 +5,7 @@ import com.xiaozhi.communication.common.SessionManager;
 import com.xiaozhi.dialogue.llm.factory.ChatModelFactory;
 import com.xiaozhi.dialogue.llm.memory.*;
 import com.xiaozhi.dialogue.aec.AecService;
+import com.xiaozhi.dialogue.rag.KnowledgeRetrievalService;
 import com.xiaozhi.dialogue.service.*;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.dialogue.stt.factory.SttServiceFactory;
@@ -72,6 +73,9 @@ public class ChatService {
     @Autowired
     private SysUserMemoryService userMemoryService;
 
+    @Autowired(required = false)
+    private KnowledgeRetrievalService knowledgeRetrievalService;
+
     /**
      * TODO 最终要将ChatService变为Persona工厂类。
      * 目前只有 终端设备建立连接与唤醒时需要 初始化 Persona。
@@ -124,6 +128,7 @@ public class ChatService {
                 .messageService(sysMessageService)
                 .goodbyeMessages(goodbyeMessages)
                 .userMemoryService(userMemoryService)
+                .knowledgeRetrievalService(knowledgeRetrievalService)
                 .build();
         session.setPersona(persona);
         return persona;

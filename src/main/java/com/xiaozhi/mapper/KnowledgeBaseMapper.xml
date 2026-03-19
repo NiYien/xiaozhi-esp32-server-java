@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.KnowledgeBaseMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysKnowledgeBase">
+        <id property="knowledgeBaseId" column="knowledgeBaseId" />
+        <result property="knowledgeBaseName" column="knowledgeBaseName" />
+        <result property="description" column="description" />
+        <result property="userId" column="userId" />
+        <result property="embeddingConfigId" column="embeddingConfigId" />
+        <result property="state" column="state" />
+        <result property="createTime" column="createTime" />
+        <result property="updateTime" column="updateTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        knowledgeBaseId, knowledgeBaseName, description, userId, embeddingConfigId,
+        state, createTime, updateTime
+    </sql>
+
+    <select id="query" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_base
+        WHERE state = '1'
+        <if test="userId != null">AND userId = #{userId}</if>
+        <if test="knowledgeBaseName != null and knowledgeBaseName != ''">AND knowledgeBaseName LIKE CONCAT('%', #{knowledgeBaseName}, '%')</if>
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_base
+        WHERE knowledgeBaseId = #{knowledgeBaseId}
+    </select>
+
+    <insert id="add" useGeneratedKeys="true" keyProperty="knowledgeBaseId" parameterType="com.xiaozhi.entity.SysKnowledgeBase">
+        INSERT INTO sys_knowledge_base (knowledgeBaseName, description, userId, embeddingConfigId, state)
+        VALUES (#{knowledgeBaseName}, #{description}, #{userId}, #{embeddingConfigId}, #{state})
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysKnowledgeBase">
+        UPDATE sys_knowledge_base
+        <set>
+            <if test="knowledgeBaseName != null and knowledgeBaseName != ''">knowledgeBaseName = #{knowledgeBaseName},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="embeddingConfigId != null">embeddingConfigId = #{embeddingConfigId},</if>
+            <if test="state != null and state != ''">state = #{state},</if>
+        </set>
+        WHERE knowledgeBaseId = #{knowledgeBaseId}
+    </update>
+
+    <update id="deleteById">
+        UPDATE sys_knowledge_base SET state = '0' WHERE knowledgeBaseId = #{knowledgeBaseId}
+    </update>
+
+    <select id="selectByIds" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List" />
+        FROM sys_knowledge_base
+        WHERE state = '1' AND knowledgeBaseId IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+</mapper>

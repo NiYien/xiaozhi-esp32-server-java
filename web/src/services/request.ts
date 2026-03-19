@@ -209,4 +209,15 @@ export const http = {
   getList<T = unknown>(url: string, params?: ListQueryParams): Promise<ListResponse<T>> {
     return request.get(url, { params })
   },
+
+  /**
+   * 文件上传（multipart/form-data）- 通用数据响应
+   */
+  upload<T = unknown>(url: string, formData: FormData): Promise<DataResponse<T>> {
+    return request.post(url, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
 }

@@ -4,6 +4,7 @@ import com.xiaozhi.communication.common.ChatSession;
 import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.llm.tool.XiaozhiToolMetadata;
 import com.xiaozhi.dialogue.monitor.UsageMetricsHelper;
+import com.xiaozhi.dialogue.rag.KnowledgeRetrievalService;
 import com.xiaozhi.dialogue.stt.SttService;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.service.SysMessageService;
@@ -113,6 +114,11 @@ public class Persona {
     private SysUserMemoryService userMemoryService;
 
     /**
+     * RAG 知识检索服务（可选，当 xiaozhi.rag.enabled=true 时注入）
+     */
+    private KnowledgeRetrievalService knowledgeRetrievalService;
+
+    /**
      * 对话轮次计数器，每 MEMORY_EXTRACT_INTERVAL 轮触发一次记忆提取
      */
     private static final int MEMORY_EXTRACT_INTERVAL = 3;
@@ -174,6 +180,16 @@ public class Persona {
                 .toolContext(TOOL_CONTEXT_SESSION_KEY, session)
                 .toolContext("conversationTimestamp", now.toEpochMilli())
                 .build();
+
+        // RAG 知识检索：根据用户问题检索角色关联知识库中的相关知识并注入到对话上下文
+        if (knowledgeRetrievalService != null && conversation.getRole() != null) {
+            try {
+                String knowledgeContext = knowledgeRetrievalService.retrieveKnowledge(userMessage.getText(), conversation.getRole());
+                conversation.setKnowledgeContext(knowledgeContext);
+            } catch (Exception e) {
+                logger.warn("RAG 知识检索失败，继续正常对话", e);
+            }
+        }
 
         conversation.add(userMessage);
         List<Message> messages = conversation.messages();
