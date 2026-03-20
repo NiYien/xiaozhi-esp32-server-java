@@ -58,8 +58,8 @@ const routes: RouteRecordRaw[] = [
         name: 'dashboard',
         component: () => import('../views/DashboardView.vue'),
         meta: {
-          title: 'router.title.dashboard',
-          icon: 'DashboardOutlined',
+          title: 'router.title.message',
+          icon: 'MessageOutlined',
           requiresAuth: true,
           permission: 'system:dashboard',
         },
@@ -120,6 +120,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'voiceprint',
+        name: 'voiceprint',
+        component: () => import('../views/VoiceprintView.vue'),
+        meta: {
+          title: 'router.title.voiceprint',
+          icon: 'AudioOutlined',
+          requiresAuth: true,
+          permission: 'system:voiceprint',
+        },
+      },
+      {
         path: 'template',
         name: 'template',
         component: () => import('../views/TemplateView.vue'),
@@ -149,6 +160,17 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/MemoryManagementView.vue'),
         meta: {
           title: 'router.title.summaryMemory',
+          parent: 'router.parent.memoryManagement',
+          requiresAuth: true,
+          permission: 'system:message',
+        },
+      },
+      {
+        path: 'memory/long',
+        name: 'memory-long',
+        component: () => import('../views/MemoryManagementView.vue'),
+        meta: {
+          title: 'router.title.longTermMemory',
           parent: 'router.parent.memoryManagement',
           requiresAuth: true,
           permission: 'system:message',
@@ -219,6 +241,17 @@ const routes: RouteRecordRaw[] = [
           parent: 'router.parent.configManagement',
           requiresAuth: true,
           permission: 'system:config:firmware',
+        },
+      },
+      {
+        path: 'config/mcp-server',
+        name: 'config-mcp-server',
+        component: () => import('../views/config/McpServerView.vue'),
+        meta: {
+          title: 'router.title.mcpServer',
+          parent: 'router.parent.configManagement',
+          requiresAuth: true,
+          permission: 'system:config:mcp-server',
         },
       },
       // 个人中心

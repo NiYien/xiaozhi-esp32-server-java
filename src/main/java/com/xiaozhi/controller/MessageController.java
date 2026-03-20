@@ -1,5 +1,6 @@
 package com.xiaozhi.controller;
 
+import com.github.pagehelper.PageInfo;
 import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.common.web.PageFilter;
 import com.xiaozhi.communication.common.SessionManager;
@@ -12,9 +13,12 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -33,6 +37,28 @@ public class MessageController extends BaseController {
     // 后续考虑：未来如果将设备对话与管理台分离部署，则此SessionManager将不可使用。
     @Resource
     private SessionManager sessionManager;
+    /**
+     * 按 sessionId 分组查询对话列表
+     */
+    @GetMapping("/sessions")
+    @ResponseBody
+    @Operation(summary = "查询对话列表", description = "按 sessionId 分组聚合查询对话列表")
+    public ResultMessage sessions(
+            @RequestParam(required = false) String deviceId,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") Date startTime,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") Date endTime,
+            HttpServletRequest request) {
+        try {
+            PageFilter pageFilter = initPageFilter(request);
+            Integer userId = CmsUtils.getUserId();
+            List<Map<String, Object>> sessions = sysMessageService.querySessions(userId, deviceId, startTime, endTime, pageFilter);
+            return ResultMessage.success(new PageInfo<>(sessions));
+        } catch (Exception e) {
+            logger.error(e.getMessage(), e);
+            return ResultMessage.error();
+        }
+    }
+
     /**
      * 查询对话
      *
@@ -76,6 +102,23 @@ public class MessageController extends BaseController {
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             return ResultMessage.error();
+        }
+    }
+
+    /**
+     * 批量为历史无标题的会话生成 LLM 标题
+     */
+    @PostMapping("/generateTitles")
+    @ResponseBody
+    @Operation(summary = "批量生成对话标题", description = "为所有无标题的历史会话调用 LLM 生成标题")
+    public ResultMessage generateTitles() {
+        try {
+            Integer userId = CmsUtils.getUserId();
+            Map<String, Integer> result = sysMessageService.batchGenerateTitles(userId);
+            return ResultMessage.success("批量生成完成", result);
+        } catch (Exception e) {
+            logger.error("批量生成对话标题失败", e);
+            return ResultMessage.error("批量生成失败: " + e.getMessage());
         }
     }
 

@@ -73,6 +73,9 @@ public class SysMessage extends Base<SysMessage> {
     @Schema(description = "会话ID")
     private String sessionId;
 
+    @Schema(description = "会话标题（LLM生成）")
+    private String sessionTitle;
+
     @Schema(description = "角色ID")
     private Integer roleId;
 

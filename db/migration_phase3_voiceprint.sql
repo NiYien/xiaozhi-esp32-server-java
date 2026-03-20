@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS `xiaozhi`.`sys_voiceprint` (
   `userId` int NOT NULL COMMENT '用户ID，关联sys_user表',
   `deviceId` varchar(255) NOT NULL COMMENT '采集声纹时使用的设备ID',
   `voiceprintName` varchar(100) NOT NULL COMMENT '声纹名称，用于标识说话人',
-  `embedding` blob NOT NULL COMMENT '声纹嵌入向量，192维float32，768字节',
+  `embedding` blob NOT NULL COMMENT '声纹嵌入向量，256维float32，1024字节',
   `sampleCount` int DEFAULT 1 COMMENT '采样次数，多次录制通过加权平均提高精度',
   `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-有效，0-无效',
   `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

@@ -982,15 +982,50 @@
             "llm": [
                 {
                     "llm_name": "deepseek-chat",
-                    "tags": "LLM,CHAT,",
-                    "max_tokens": 64000,
+                    "tags": "LLM,CHAT,64K",
+                    "max_tokens": 65536,
                     "model_type": "chat",
                     "is_tools": true
                 },
                 {
                     "llm_name": "deepseek-reasoner",
-                    "tags": "LLM,CHAT,",
-                    "max_tokens": 64000,
+                    "tags": "LLM,CHAT,64K",
+                    "max_tokens": 65536,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "deepseek-r1-distill-qwen-7b",
+                    "tags": "LLM,CHAT,32K",
+                    "max_tokens": 32768,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "deepseek-r1-distill-qwen-14b",
+                    "tags": "LLM,CHAT,32K",
+                    "max_tokens": 32768,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "deepseek-r1-distill-qwen-32b",
+                    "tags": "LLM,CHAT,32K",
+                    "max_tokens": 32768,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "deepseek-r1",
+                    "tags": "LLM,CHAT,64K,REASONING",
+                    "max_tokens": 65536,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "deepseek-v3",
+                    "tags": "LLM,CHAT,64K",
+                    "max_tokens": 65536,
                     "model_type": "chat",
                     "is_tools": true
                 }
@@ -1430,7 +1465,50 @@
             "logo": "",
             "tags": "LLM,TEXT EMBEDDING",
             "status": "1",
-            "llm": []
+            "llm": [
+                {
+                    "llm_name": "anthropic.claude-sonnet-4-20250514-v1:0",
+                    "tags": "LLM,CHAT,200K",
+                    "max_tokens": 200000,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "anthropic.claude-haiku-4-20250514-v1:0",
+                    "tags": "LLM,CHAT,200K",
+                    "max_tokens": 200000,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "meta.llama4-maverick-17b-instruct-v1:0",
+                    "tags": "LLM,CHAT,128K",
+                    "max_tokens": 131072,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "meta.llama4-scout-17b-instruct-v1:0",
+                    "tags": "LLM,CHAT,128K",
+                    "max_tokens": 131072,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "amazon.nova-pro-v1:0",
+                    "tags": "LLM,CHAT,300K",
+                    "max_tokens": 300000,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "amazon.nova-lite-v1:0",
+                    "tags": "LLM,CHAT,300K",
+                    "max_tokens": 300000,
+                    "model_type": "chat",
+                    "is_tools": true
+                }
+            ]
         },
         {
             "name": "Gemini",
@@ -1438,6 +1516,48 @@
             "tags": "LLM,TEXT EMBEDDING,IMAGE2TEXT",
             "status": "1",
             "llm": [
+                {
+                    "llm_name": "gemini-2.5-pro",
+                    "tags": "LLM,CHAT,1024K",
+                    "max_tokens": 1048576,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "gemini-2.5-flash",
+                    "tags": "LLM,CHAT,1024K",
+                    "max_tokens": 1048576,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "gemini-2.0-flash",
+                    "tags": "LLM,CHAT,1024K",
+                    "max_tokens": 1048576,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "gemini-2.0-flash-lite",
+                    "tags": "LLM,CHAT,1024K",
+                    "max_tokens": 1048576,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "gemini-1.5-pro",
+                    "tags": "LLM,CHAT,2048K",
+                    "max_tokens": 2097152,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "gemini-1.5-flash",
+                    "tags": "LLM,CHAT,1024K",
+                    "max_tokens": 1048576,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
                 {
                     "llm_name": "gemini-2.5-flash",
                     "tags": "LLM,CHAT,1024K,IMAGE2TEXT",
@@ -3787,7 +3907,43 @@
             "logo": "",
             "tags": "LLM",
             "status": "1",
-            "llm": []
+            "llm": [
+                {
+                    "llm_name": "ernie-4.5-8k",
+                    "tags": "LLM,CHAT,8K",
+                    "max_tokens": 8192,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "ernie-4.5-turbo-8k",
+                    "tags": "LLM,CHAT,8K",
+                    "max_tokens": 8192,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "ernie-x1-32k",
+                    "tags": "LLM,CHAT,32K",
+                    "max_tokens": 32768,
+                    "model_type": "chat",
+                    "is_tools": false
+                },
+                {
+                    "llm_name": "ernie-4.0-8k",
+                    "tags": "LLM,CHAT,8K",
+                    "max_tokens": 8192,
+                    "model_type": "chat",
+                    "is_tools": true
+                },
+                {
+                    "llm_name": "ernie-3.5-8k",
+                    "tags": "LLM,CHAT,8K",
+                    "max_tokens": 8192,
+                    "model_type": "chat",
+                    "is_tools": true
+                }
+            ]
         },
         {
             "name": "Fish Audio",

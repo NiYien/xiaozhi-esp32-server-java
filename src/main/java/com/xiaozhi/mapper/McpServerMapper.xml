@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.McpServerMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysMcpServer">
+        <id column="serverId" property="serverId" jdbcType="BIGINT"/>
+        <result column="serverName" property="serverName" jdbcType="VARCHAR"/>
+        <result column="serverCode" property="serverCode" jdbcType="VARCHAR"/>
+        <result column="transportType" property="transportType" jdbcType="VARCHAR"/>
+        <result column="serverUrl" property="serverUrl" jdbcType="VARCHAR"/>
+        <result column="authType" property="authType" jdbcType="VARCHAR"/>
+        <result column="authToken" property="authToken" jdbcType="VARCHAR"/>
+        <result column="enabled" property="enabled" jdbcType="TINYINT"/>
+        <result column="userId" property="userId" jdbcType="INTEGER"/>
+        <result column="createTime" property="createTime" jdbcType="TIMESTAMP"/>
+        <result column="updateTime" property="updateTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        serverId, serverName, serverCode, transportType, serverUrl, authType, authToken, enabled, userId, createTime, updateTime
+    </sql>
+
+    <select id="query" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_mcp_server
+        <where>
+            <if test="serverName != null and serverName != ''">
+                AND serverName LIKE CONCAT('%', #{serverName}, '%')
+            </if>
+            <if test="serverCode != null and serverCode != ''">
+                AND serverCode = #{serverCode}
+            </if>
+            <if test="transportType != null and transportType != ''">
+                AND transportType = #{transportType}
+            </if>
+            <if test="enabled != null">
+                AND enabled = #{enabled}
+            </if>
+            <if test="userId != null">
+                AND userId = #{userId}
+            </if>
+        </where>
+        ORDER BY createTime DESC
+    </select>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_mcp_server
+        WHERE serverId = #{serverId}
+    </select>
+
+    <select id="selectByServerCode" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_mcp_server
+        WHERE serverCode = #{serverCode}
+    </select>
+
+    <select id="selectEnabled" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Base_Column_List"/>
+        FROM sys_mcp_server
+        WHERE enabled = 1
+        ORDER BY createTime ASC
+    </select>
+
+    <insert id="add" parameterType="com.xiaozhi.entity.SysMcpServer" useGeneratedKeys="true" keyProperty="serverId">
+        INSERT INTO sys_mcp_server (
+            serverName,
+            serverCode,
+            transportType,
+            serverUrl,
+            authType,
+            authToken,
+            enabled,
+            userId,
+            createTime,
+            updateTime
+        ) VALUES (
+            #{serverName,jdbcType=VARCHAR},
+            #{serverCode,jdbcType=VARCHAR},
+            #{transportType,jdbcType=VARCHAR},
+            #{serverUrl,jdbcType=VARCHAR},
+            #{authType,jdbcType=VARCHAR},
+            #{authToken,jdbcType=VARCHAR},
+            #{enabled,jdbcType=TINYINT},
+            #{userId,jdbcType=INTEGER},
+            #{createTime,jdbcType=TIMESTAMP},
+            #{updateTime,jdbcType=TIMESTAMP}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.xiaozhi.entity.SysMcpServer">
+        UPDATE sys_mcp_server
+        <set>
+            <if test="serverName != null">
+                serverName = #{serverName,jdbcType=VARCHAR},
+            </if>
+            <if test="serverCode != null">
+                serverCode = #{serverCode,jdbcType=VARCHAR},
+            </if>
+            <if test="transportType != null">
+                transportType = #{transportType,jdbcType=VARCHAR},
+            </if>
+            <if test="serverUrl != null">
+                serverUrl = #{serverUrl,jdbcType=VARCHAR},
+            </if>
+            <if test="authType != null">
+                authType = #{authType,jdbcType=VARCHAR},
+            </if>
+            <if test="authToken != null">
+                authToken = #{authToken,jdbcType=VARCHAR},
+            </if>
+            <if test="enabled != null">
+                enabled = #{enabled,jdbcType=TINYINT},
+            </if>
+            updateTime = NOW(),
+        </set>
+        WHERE serverId = #{serverId,jdbcType=BIGINT}
+    </update>
+
+    <delete id="delete" parameterType="java.lang.Long">
+        DELETE FROM sys_mcp_server
+        WHERE serverId = #{serverId}
+    </delete>
+
+</mapper>

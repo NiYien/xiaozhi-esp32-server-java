@@ -1,12 +1,19 @@
 import { http } from './request'
 import api from './api'
-import type { Message, MessageQueryParams } from '@/types/message'
+import type { Message, MessageQueryParams, ChatSession, SessionQueryParams } from '@/types/message'
 
 /**
  * 查询消息列表
  */
 export function queryMessages(params: Partial<MessageQueryParams>) {
   return http.getPage<Message>(api.message.query, params)
+}
+
+/**
+ * 查询对话列表（按 sessionId 分组）
+ */
+export function querySessions(params: Partial<SessionQueryParams>) {
+  return http.getPage<ChatSession>(api.message.sessions, params)
 }
 
 /**

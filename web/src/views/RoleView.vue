@@ -19,6 +19,7 @@ import { useRoleManager } from '@/composables/useRoleManager'
 import { useMemoryView } from '@/composables/useMemoryView'
 import { queryRoles, addRole, updateRole, deleteRole, testVoice, getSystemGlobalTools, getDisabledTools, updateToolsStatus } from '@/services/role'
 import { queryTemplates } from '@/services/template'
+import { queryKnowledgeBases, type KnowledgeBase } from '@/services/knowledge'
 import { getResourceUrl } from '@/utils/resource'
 import { useAvatar } from '@/composables/useAvatar'
 import { uploadFile } from '@/services/upload'
@@ -83,7 +84,10 @@ const formData = reactive<RoleFormData>({
   ttsPitch: 1.0,
   ttsSpeed: 1.0,
   memoryType: 'window',
-  comfortWords: [] as string[]
+  comfortWords: [] as string[],
+  knowledgeBaseIds: [] as number[],
+  ragTopK: undefined,
+  ragThreshold: undefined
 })
 
 // 编辑状态
@@ -116,6 +120,10 @@ const ttsAdvancedVisible = ref<string[]>([])
 const pendingVadValues = ref<Record<string, number> | null>(null)
 const pendingModelValues = ref<Record<string, number> | null>(null)
 const pendingTtsValues = ref<Record<string, number> | null>(null)
+
+// 知识库相关
+const knowledgeBaseList = ref<KnowledgeBase[]>([])
+const knowledgeBaseLoading = ref(false)
 
 // MCP 相关
 const mcpToolsLoading = ref(false)
@@ -239,6 +247,8 @@ const handleEdit = (record: Role) => {
     pendingModelValues.value = null
     pendingTtsValues.value = null
 
+    selectedProvider.value = voiceInfo?.provider || ''
+
     // 设置表单所有值（包括高级设置的值）
     Object.assign(formData, {
       roleName: record.roleName,
@@ -260,7 +270,12 @@ const handleEdit = (record: Role) => {
       ttsPitch: record.ttsPitch ?? 1.0,
       ttsSpeed: record.ttsSpeed ?? 1.0,
       memoryType: record.memoryType || 'window',
-      comfortWords: parseComfortWords(record.comfortWords)
+      comfortWords: parseComfortWords(record.comfortWords),
+      knowledgeBaseIds: record.knowledgeBaseIds
+        ? record.knowledgeBaseIds.split(',').map(Number).filter((n: number) => !isNaN(n))
+        : [],
+      ragTopK: record.ragTopK ?? undefined,
+      ragThreshold: record.ragThreshold ?? undefined
     })
 
     // 加载 MCP 工具列表
@@ -330,6 +345,11 @@ const handleSubmit = async () => {
       ttsId: ttsId,
       // 将安抚词数组转为 JSON 字符串
       comfortWords: filteredComfortWords.length > 0 ? JSON.stringify(filteredComfortWords) : null,
+      // 将知识库ID数组转为逗号分隔字符串
+      knowledgeBaseIds: formData.knowledgeBaseIds.length > 0 ? formData.knowledgeBaseIds.join(',') : null,
+      // RAG 参数为空时提交 null
+      ragTopK: formData.ragTopK ?? null,
+      ragThreshold: formData.ragThreshold ?? null,
     }
 
     if (editingRoleId.value) {
@@ -430,7 +450,10 @@ const resetForm = () => {
     ttsPitch: 1.0,
     ttsSpeed: 1.0,
     memoryType: 'window',
-    comfortWords: []
+    comfortWords: [],
+    knowledgeBaseIds: [],
+    ragTopK: undefined,
+    ragThreshold: undefined
   })
 }
 
@@ -854,6 +877,22 @@ const loadTemplates = async () => {
   }
 }
 
+// 加载知识库列表
+const loadKnowledgeBases = async () => {
+  try {
+    knowledgeBaseLoading.value = true
+    const res = await queryKnowledgeBases({})
+    if (res.code === 200 && res.data) {
+      knowledgeBaseList.value = (res.data.list || []) as KnowledgeBase[]
+    }
+  } catch (error) {
+    console.error('加载知识库列表失败:', error)
+    message.error(t('role.knowledgeBaseLoadFailed'))
+  } finally {
+    knowledgeBaseLoading.value = false
+  }
+}
+
 // 获取所有可用音色
 const allAvailableVoices = computed(() => {
   return getAllVoices()
@@ -928,6 +967,7 @@ Promise.all([
   loadAllVoices(),
   loadSttOptions(),
   loadTemplates(),
+  loadKnowledgeBases(),
   fetchData()
 ])
 
@@ -1527,6 +1567,58 @@ if (!editingRoleId.value) {
                 </a-form-item>
               </a-col>
             </a-row>
+            <!-- 知识库配置 -->
+            <a-divider orientation="left">{{ t('role.knowledgeBaseSettings') }}</a-divider>
+            <a-row :gutter="20">
+              <a-col :xl="8" :lg="12" :xs="24">
+                <a-form-item :label="t('role.knowledgeBase')">
+                  <a-select
+                    v-model:value="formData.knowledgeBaseIds"
+                    mode="multiple"
+                    :placeholder="t('role.selectKnowledgeBase')"
+                    :loading="knowledgeBaseLoading"
+                    :max-tag-count="5"
+                    show-search
+                    allow-clear
+                    :filter-option="(input: string, option: any) =>
+                      option.label.toLowerCase().includes(input.toLowerCase())
+                    "
+                  >
+                    <a-select-option
+                      v-for="kb in knowledgeBaseList"
+                      :key="kb.knowledgeBaseId"
+                      :value="kb.knowledgeBaseId"
+                      :label="kb.knowledgeBaseName"
+                    >
+                      {{ kb.knowledgeBaseName }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :xl="4" :lg="6" :xs="12">
+                <a-form-item :label="t('role.ragTopK')">
+                  <a-input-number
+                    v-model:value="formData.ragTopK"
+                    :min="1"
+                    :placeholder="t('role.ragDefaultConfig')"
+                    style="width: 100%"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :xl="4" :lg="6" :xs="12">
+                <a-form-item :label="t('role.ragThreshold')">
+                  <a-input-number
+                    v-model:value="formData.ragThreshold"
+                    :min="0"
+                    :max="1"
+                    :step="0.01"
+                    :placeholder="t('role.ragDefaultConfig')"
+                    style="width: 100%"
+                  />
+                </a-form-item>
+              </a-col>
+            </a-row>
+
             <!-- 记忆类型配置 -->
             <a-divider orientation="left">{{ t('role.memoryTypeSettings') }}</a-divider>
 

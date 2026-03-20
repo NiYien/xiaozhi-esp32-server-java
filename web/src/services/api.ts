@@ -42,6 +42,7 @@ export default {
   },
   message: {
     query: '/message',
+    sessions: '/message/sessions',
     update: '/message',
     delete: '/message',
     export: '/message/export',
@@ -93,6 +94,20 @@ export default {
     docDelete: '/knowledge/doc',
     docReprocess: '/knowledge/doc',
     docStatus: '/knowledge/doc',
+  },
+  voiceprint: {
+    list: '/voiceprint',
+    register: '/voiceprint/register',
+    delete: '/voiceprint',
+    status: '/voiceprint/status',
+  },
+  mcpServer: {
+    query: '/mcpServer',
+    add: '/mcpServer',
+    update: '/mcpServer',
+    delete: '/mcpServer',
+    test: '/mcpServer/test',
+    refresh: '/mcpServer/refresh',
   },
 }
 

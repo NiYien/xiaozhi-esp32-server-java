@@ -90,6 +90,23 @@ public class ChatModelFactory {
     }
 
     /**
+     * 获取任意可用的 ChatModel（用于批量任务等不依赖特定角色的场景）
+     * 优先使用 chat 类型配置
+     * @return ChatModel 实例，无可用配置时返回 null
+     */
+    public ChatModel takeAnyChatModel() {
+        try {
+            SysConfig config = configService.selectModelType(SysConfig.ModelType.chat.getValue());
+            if (config != null) {
+                return createChatModel(config, new SysRole());
+            }
+        } catch (Exception e) {
+            // 忽略，尝试其他方式
+        }
+        return null;
+    }
+
+    /**
      * 根据角色ID创建ChatModel
      * @param roleId 角色ID
      * @return ChatModel实例

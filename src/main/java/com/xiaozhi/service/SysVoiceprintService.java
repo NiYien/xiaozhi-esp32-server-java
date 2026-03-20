@@ -15,7 +15,7 @@ public interface SysVoiceprintService {
      * @param userId   用户ID
      * @param deviceId 设备ID
      * @param name     声纹名称
-     * @param embedding 嵌入向量（192维float32）
+     * @param embedding 嵌入向量（256维float32）
      * @return 新创建的声纹记录
      */
     SysVoiceprint register(Integer userId, String deviceId, String name, float[] embedding);

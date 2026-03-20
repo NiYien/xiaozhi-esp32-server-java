@@ -45,6 +45,9 @@ export interface Role {
   ttsSpeed?: number // 语音语速(0.5-2.0)
   memoryType?: MemoryType // 记忆类型
   comfortWords?: string[] // 安抚词列表
+  knowledgeBaseIds?: string // 逗号分隔的知识库ID
+  ragTopK?: number // RAG 返回条数
+  ragThreshold?: number // RAG 相似度阈值
 }
 
 import type { BaseQueryParams } from './api'
@@ -123,6 +126,10 @@ export interface RoleFormData {
   memoryType?: MemoryType
   // 安抚词
   comfortWords?: string[]
+  // 知识库相关
+  knowledgeBaseIds: number[]
+  ragTopK?: number
+  ragThreshold?: number
 }
 
 // 测试语音参数

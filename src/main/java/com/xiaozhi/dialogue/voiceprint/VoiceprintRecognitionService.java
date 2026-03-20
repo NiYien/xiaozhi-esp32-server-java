@@ -64,7 +64,7 @@ public class VoiceprintRecognitionService {
      * 从PCM音频提取嵌入向量
      *
      * @param pcmData 16kHz 16bit单声道PCM数据
-     * @return 192维float32嵌入向量，音频过短或提取失败返回null
+     * @return 256维float32嵌入向量，音频过短或提取失败返回null
      */
     public float[] extractEmbedding(byte[] pcmData) {
         return speakerEmbeddingService.extractEmbedding(pcmData);

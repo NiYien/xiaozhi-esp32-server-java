@@ -20,7 +20,7 @@ import java.util.Map;
 
 /**
  * 说话人嵌入向量提取服务
- * 使用ONNX Runtime加载speaker_embedding模型，从PCM音频中提取192维说话人特征向量。
+ * 使用ONNX Runtime加载speaker_embedding模型，从PCM音频中提取256维说话人特征向量。
  * 复用与VAD相同的OrtEnvironment单例。模型文件不存在时优雅降级（enabled=false）。
  */
 @Component
@@ -30,7 +30,7 @@ public class SpeakerEmbeddingService {
     /**
      * 嵌入向量维度：192维float32
      */
-    public static final int EMBEDDING_DIM = 192;
+    public static final int EMBEDDING_DIM = 256;
 
     /**
      * 最小语音时长（秒），低于此时长不进行声纹识别

@@ -513,9 +513,9 @@ fetchData()
                   name="configName"
                   :rules="[{ required: true, message: t('config.enterName', { type: t(configTypeInfo.label) }) }]"
                 >
-                  <!-- LLM 使用下拉框 -->
+                  <!-- LLM 且有预设模型列表时使用下拉框 -->
                   <a-select
-                    v-if="configType === 'llm' && currentType"
+                    v-if="configType === 'llm' && currentType && modelOptions.length > 0"
                     v-model:value="formData.configName"
                     show-search
                     allow-clear
@@ -526,7 +526,7 @@ fetchData()
                         option.label.toLowerCase().includes(input.toLowerCase())
                     "
                   />
-                  <!-- 其他使用输入框 -->
+                  <!-- LLM 模型列表为空或其他类型时使用输入框，支持手动输入 -->
                   <a-input
                     v-else
                     v-model:value="formData.configName"

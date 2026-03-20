@@ -12,7 +12,7 @@ import java.util.Date;
 
 /**
  * 用户声纹实体
- * 存储用户的声纹嵌入向量（192维float32）
+ * 存储用户的声纹嵌入向量（256维float32）
  */
 @Data
 @Accessors(chain = true)
@@ -32,7 +32,7 @@ public class SysVoiceprint implements Serializable {
     private String voiceprintName;
 
     /**
-     * 声纹嵌入向量原始字节（192维float32 = 768字节）
+     * 声纹嵌入向量原始字节（256维float32 = 1024字节）
      */
     @JsonIgnore
     @Schema(description = "声纹嵌入向量（二进制）")

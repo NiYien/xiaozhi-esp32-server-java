@@ -13,6 +13,8 @@
         <result property="messageType" column="messageType" />
         <result property="audioPath" column="audioPath" />
         <result property="toolCalls" column="toolCalls" />
+        <result property="sessionId" column="sessionId" />
+        <result property="sessionTitle" column="session_title" />
         <result property="deviceName" column="deviceName" />
         <result property="userId" column="userId" />
         <result property="roleName" column="roleName" />
@@ -29,7 +31,7 @@
     </resultMap>
 
     <sql id="Message_Column_List">
-        sys_message.messageId, sys_message.deviceId, sys_message.message, sys_message.sender, sys_message.roleId, sys_message.state, sys_message.createTime, sys_message.messageType, sys_message.audioPath, sys_message.toolCalls
+        sys_message.messageId, sys_message.deviceId, sys_message.sessionId, sys_message.message, sys_message.sender, sys_message.roleId, sys_message.state, sys_message.createTime, sys_message.messageType, sys_message.audioPath, sys_message.toolCalls
     </sql>
 
     <sql id="Device_Column_List">
@@ -69,6 +71,9 @@
             </if>
             <if test="roleId != null">
                 AND sys_message.roleId = #{roleId}
+            </if>
+            <if test="sessionId != null and sessionId != ''">
+                AND sys_message.sessionId = #{sessionId}
             </if>
         ORDER BY sys_message.createTime DESC, sender DESC
     </select>
@@ -153,6 +158,69 @@
         FROM sys_message
         WHERE sys_message.messageId = #{messageId}
         AND sys_message.state = 1
+    </select>
+
+    <!-- 按 sessionId 分组聚合查询对话列表 -->
+    <select id="querySessions" resultType="java.util.Map">
+        SELECT
+            IFNULL(m.sessionId, CONCAT('legacy_', m.messageId)) AS sessionId,
+            COALESCE(
+                MAX(m.session_title),
+                SUBSTRING(MIN(CASE WHEN m.sender = 'user' THEN CONCAT(LPAD(m.messageId, 10, '0'), m.message) END), 11, 30)
+            ) AS title,
+            COUNT(*) AS messageCount,
+            MIN(m.createTime) AS firstMessageTime,
+            MAX(m.createTime) AS lastMessageTime,
+            m.deviceId AS deviceId,
+            d.deviceName AS deviceName,
+            r.roleName AS roleName
+        FROM sys_message m
+        LEFT JOIN sys_device d ON m.deviceId = d.deviceId
+        LEFT JOIN sys_role r ON m.roleId = r.roleId
+        WHERE m.state = 1
+            <if test="userId != null">AND d.userId = #{userId}</if>
+            <if test="deviceId != null and deviceId != ''">AND m.deviceId = #{deviceId}</if>
+            <if test="startTime != null">AND m.createTime &gt;= #{startTime}</if>
+            <if test="endTime != null">AND m.createTime &lt;= #{endTime}</if>
+        GROUP BY IFNULL(m.sessionId, CONCAT('legacy_', m.messageId)), m.deviceId, d.deviceName, r.roleName
+        ORDER BY lastMessageTime DESC
+    </select>
+
+    <!-- 更新指定 sessionId 的首条消息的 session_title -->
+    <update id="updateSessionTitle">
+        UPDATE sys_message
+        SET session_title = #{sessionTitle}
+        WHERE messageId = (
+            SELECT minId FROM (
+                SELECT MIN(messageId) AS minId FROM sys_message
+                WHERE sessionId = #{sessionId} AND state = 1
+            ) tmp
+        )
+    </update>
+
+    <!-- 查询无标题且消息数 >= 2 的 sessionId 列表 -->
+    <select id="querySessionsWithoutTitle" resultType="java.lang.String">
+        SELECT m.sessionId
+        FROM sys_message m
+        LEFT JOIN sys_device d ON m.deviceId = d.deviceId
+        WHERE m.state = 1
+            AND m.sessionId IS NOT NULL
+            AND m.sessionId != ''
+            <if test="userId != null">AND d.userId = #{userId}</if>
+        GROUP BY m.sessionId
+        HAVING COUNT(*) >= 2
+            AND MAX(m.session_title) IS NULL
+        ORDER BY MAX(m.createTime) DESC
+    </select>
+
+    <!-- 查询指定 sessionId 的前 N 条消息 -->
+    <select id="queryMessagesBySessionId" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Message_Column_List"></include>
+        FROM sys_message
+        WHERE sessionId = #{sessionId} AND state = 1 AND messageType = 'NORMAL'
+        ORDER BY createTime ASC
+        LIMIT #{limit}
     </select>
 
 </mapper>

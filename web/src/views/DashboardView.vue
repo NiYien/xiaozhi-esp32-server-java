@@ -3,14 +3,10 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/store/user'
 import { useAvatar } from '@/composables/useAvatar'
-import { queryDevices } from '@/services/device'
-import { queryMessages } from '@/services/message'
-import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 // @ts-ignore
 import jsonp from 'jsonp'
-import type { Device } from '@/types/device'
-import type { Message } from '@/types/message'
+import MessageView from './MessageView.vue'
 
 const { t } = useI18n()
 
@@ -20,68 +16,16 @@ interface DailySentence {
   note: string
 }
 
-interface FormattedMessage {
-  id: string
-  content: string
-  type: 'text'
-  isUser: boolean
-  timestamp: Date
-}
-
 const userStore = useUserStore()
 const { getAvatarUrl } = useAvatar()
 
 // 状态
-const loading = ref(true)
-const userLoading = ref(true)
+const loading = ref(false)
 const sentenceShow = ref(true)
 const sentence = ref<DailySentence>({
   content: '每一天都是新的开始',
   note: 'Every day is a new beginning'
 })
-
-// 设备列表
-const devices = ref<Device[]>([])
-
-// 消息列表
-const messages = ref<Message[]>([])
-const page = ref(1)
-const isLastData = ref(false)
-
-// 表格列定义
-const columns = computed(() => [
-  {
-    title: t('device.deviceName'),
-    dataIndex: 'deviceName',
-    key: 'deviceName',
-    width: 120
-  },
-  {
-    title: t('role.roleName'),
-    dataIndex: 'roleName',
-    key: 'roleName',
-    align: 'center' as const,
-    width: 120
-  },
-  {
-    title: t('device.onlineStatus'),
-    dataIndex: 'state',
-    key: 'state',
-    align: 'center' as const,
-    width: 100
-  },
-  {
-    title: t('device.lastOnlineTime'),
-    dataIndex: 'lastLogin',
-    key: 'lastLogin',
-    align: 'center' as const,
-    width: 180,
-    sorter: (a: Device, b: Device) => {
-      if (!a.lastLogin || !b.lastLogin) return 0
-      return dayjs(a.lastLogin).unix() - dayjs(b.lastLogin).unix()
-    }
-  }
-])
 
 // 计算属性
 const timeFix = computed(() => {
@@ -114,23 +58,6 @@ const userAvatar = computed(() => {
   return '/user-avatar.png'
 })
 
-// 格式化聊天消息
-const formattedChatMessages = computed<FormattedMessage[]>(() => {
-  return messages.value.map(item => {
-    const content = item.sender === 'user' 
-      ? `${item.deviceName || '用户'} 于 ${item.createTime} 发送: ${item.message}`
-      : `${item.roleName || 'AI'} 于 ${item.createTime} 回复: ${item.message}`
-
-    return {
-      id: String(item.messageId),
-      content,
-      type: 'text' as const,
-      isUser: item.sender === 'user',
-      timestamp: new Date(item.createTime || new Date().toISOString())
-    }
-  })
-})
-
 // 获取每日一句
 const getSentence = () => {
   const day = dayjs().format('YYYY-MM-DD')
@@ -149,61 +76,9 @@ const getSentence = () => {
   })
 }
 
-// 获取设备列表
-const fetchDevices = async () => {
-  try {
-    userLoading.value = true
-    const res = await queryDevices({
-      start: 1,
-      limit: 10
-    })
-    if (res.code === 200) {
-      devices.value = res.data.list || []
-    } else {
-      message.error(res.message || '获取设备列表失败')
-    }
-  } catch (error) {
-    message.error('获取设备列表失败')
-  } finally {
-    userLoading.value = false
-  }
-}
-
-// 获取消息列表
-const fetchMessages = async () => {
-  if (isLastData.value) return
-
-  try {
-    const res = await queryMessages({
-      start: page.value,
-      limit: 10
-    })
-
-    if (res.code === 200) {
-      const messageList = res.data.list || []
-      if (messageList.length === 0) {
-        message.warning('已到最后一条数据')
-        isLastData.value = true
-        return
-      }
-
-      messages.value = [...messages.value, ...messageList]
-      page.value++
-    } else {
-      message.error(res.message || '获取消息列表失败')
-    }
-  } catch (error) {
-    message.error('获取消息列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-// 使用 async setup 进行初始化数据加载（配合 Suspense）
+// 初始化
 await Promise.all([
-  getSentence(),
-  fetchDevices(),
-  fetchMessages()
+  getSentence()
 ])
 </script>
 
@@ -241,48 +116,10 @@ await Promise.all([
       </div>
     </a-card>
 
-    <!-- 内容区域 -->
-    <a-row :gutter="[20, 20]" class="content-row">
-      <!-- 聊天记录 -->
-      <a-col :xl="14" :lg="12" :xs="24">
-        <a-card :title="t('menu.message')" :bordered="false" :loading="loading">
-          <div class="chat-messages">
-            <div v-if="formattedChatMessages.length === 0" class="empty-messages">
-              <a-empty :description="t('dashboard.noData')" />
-            </div>
-            <div v-else class="message-list">
-              <div
-                v-for="msg in formattedChatMessages"
-                :key="msg.id"
-                class="message-item"
-                :class="{ 'user-message': msg.isUser }"
-              >
-                <div class="message-content">
-                  <div class="message-text">{{ msg.content }}</div>
-                  <div class="message-time">
-                    {{ dayjs(msg.timestamp).format('YYYY-MM-DD HH:mm:ss') }}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </a-card>
-      </a-col>
-
-      <!-- 设备列表 -->
-      <a-col :xl="10" :lg="12" :xs="24">
-        <a-card :title="t('menu.device')" :bordered="false" :loading="userLoading">
-          <a-table
-            :columns="columns"
-            :data-source="devices"
-            :pagination="{ pageSize: 5, showSizeChanger: false }"
-            :scroll="{ x: 500 }"
-            size="small"
-            row-key="deviceId"
-          />
-        </a-card>
-      </a-col>
-    </a-row>
+    <!-- 嵌入对话管理页面 -->
+    <div class="message-view-container">
+      <MessageView />
+    </div>
 
     <a-back-top />
   </div>
@@ -364,84 +201,11 @@ await Promise.all([
   }
 }
 
-// 内容区域
-.content-row {
-  margin-bottom: 20px;
-}
-
-// 聊天消息
-.chat-messages {
-  min-height: 400px;
-  max-height: 600px;
-  overflow-y: auto;
-  overflow-x: hidden;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 3px;
-
-    &:hover {
-      background: rgba(0, 0, 0, 0.2);
-    }
-  }
-}
-
-.empty-messages {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 400px;
-}
-
-.message-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
-}
-
-.message-item {
-  display: flex;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  border-left: 3px solid var(--primary-color);
-  transition: all 0.3s;
-
-  &:hover {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-    transform: translateX(4px);
-  }
-
-  &.user-message {
-    border-left-color: #52c41a;
-  }
-}
-
-.message-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.message-text {
-  font-size: 14px;
-  color: var(--text-color);
-  line-height: 1.6;
-}
-
-.message-time {
-  font-size: 12px;
-  color: var(--text-secondary);
+// 对话管理容器
+.message-view-container {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 // 响应式
@@ -473,11 +237,6 @@ await Promise.all([
     justify-content: center;
     gap: 24px;
   }
-
-  .chat-messages {
-    min-height: 300px;
-    max-height: 400px;
-  }
 }
 
 // 卡片样式统一
@@ -487,7 +246,7 @@ await Promise.all([
 
   .ant-card-head {
     border-bottom: 1px solid var(--border-color);
-    
+
     .ant-card-head-title {
       font-size: 16px;
       font-weight: 600;
