@@ -28,7 +28,7 @@ public class McpSessionManager {
 
     public void customMcpHandler(ChatSession chatSession) {
         Integer roleId = chatSession.getSysDevice().getRoleId();
-        Integer userId = chatSession.getSysDevice().getUserId(); // 假设设备有userId字段
+        Integer userId = chatSession.getSysDevice().getUserId();
         ToolsSessionHolder functionSessionHolder = chatSession.getFunctionSessionHolder();
         
         // 获取所有排除的工具列表（全局和角色级别）
@@ -55,9 +55,17 @@ public class McpSessionManager {
         
         // 注册系统全局工具（带过滤）
         Map<String, ToolCallback> globalFunctions = toolsGlobalRegistry.getAllFunctions(chatSession);
-        
+
         globalFunctions.forEach((toolName, toolCallback) -> {
             // 只注册未被排除的工具
+            if (!excludedTools.contains(toolName)) {
+                functionSessionHolder.registerFunction(toolName, toolCallback);
+            }
+        });
+
+        // 注册用户接入点工具（带过滤）
+        Map<String, ToolCallback> endpointTools = toolsGlobalRegistry.getUserEndpointTools(userId);
+        endpointTools.forEach((toolName, toolCallback) -> {
             if (!excludedTools.contains(toolName)) {
                 functionSessionHolder.registerFunction(toolName, toolCallback);
             }

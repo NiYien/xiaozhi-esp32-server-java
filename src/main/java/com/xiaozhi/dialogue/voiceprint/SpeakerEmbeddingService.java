@@ -1,10 +1,8 @@
 package com.xiaozhi.dialogue.voiceprint;
 
-import ai.onnxruntime.OnnxTensor;
-import ai.onnxruntime.OrtEnvironment;
-import ai.onnxruntime.OrtException;
-import ai.onnxruntime.OrtSession;
-import ai.onnxruntime.OrtLoggingLevel;
+import com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractor;
+import com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractorConfig;
+import com.k2fsa.sherpa.onnx.OnlineStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,19 +14,18 @@ import jakarta.annotation.PreDestroy;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.Map;
 
 /**
  * 说话人嵌入向量提取服务
- * 使用ONNX Runtime加载speaker_embedding模型，从PCM音频中提取256维说话人特征向量。
- * 复用与VAD相同的OrtEnvironment单例。模型文件不存在时优雅降级（enabled=false）。
+ * 使用sherpa-onnx SpeakerEmbeddingExtractor加载speaker_embedding模型，从PCM音频中提取256维说话人特征向量。
+ * sherpa-onnx内部自动完成Fbank特征提取，接受原始波形输入。模型文件不存在时优雅降级（enabled=false）。
  */
 @Component
 public class SpeakerEmbeddingService {
     private static final Logger logger = LoggerFactory.getLogger(SpeakerEmbeddingService.class);
 
     /**
-     * 嵌入向量维度：192维float32
+     * 嵌入向量维度：256维float32
      */
     public static final int EMBEDDING_DIM = 256;
 
@@ -50,8 +47,7 @@ public class SpeakerEmbeddingService {
     @Value("${voiceprint.model.path:models/speaker_embedding.onnx}")
     private String modelPath;
 
-    private OrtEnvironment env;
-    private OrtSession session;
+    private SpeakerEmbeddingExtractor extractor;
     private volatile boolean enabled = false;
 
     @PostConstruct
@@ -64,21 +60,27 @@ public class SpeakerEmbeddingService {
         }
 
         try {
-            // 复用OrtEnvironment单例（与VAD共享）
-            env = OrtEnvironment.getEnvironment();
-            OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-            opts.setSessionLogLevel(OrtLoggingLevel.ORT_LOGGING_LEVEL_ERROR);
-            opts.setInterOpNumThreads(1);
-            opts.setIntraOpNumThreads(1);
-            opts.addCPU(true);
+            SpeakerEmbeddingExtractorConfig config = SpeakerEmbeddingExtractorConfig.builder()
+                    .setModel(modelPath)
+                    .setNumThreads(1)
+                    .setDebug(false)
+                    .setProvider("cpu")
+                    .build();
 
-            session = env.createSession(modelPath, opts);
+            extractor = new SpeakerEmbeddingExtractor(config);
+            int dim = extractor.getDim();
+
+            if (dim != EMBEDDING_DIM) {
+                logger.error("模型嵌入维度 {} 与预期 {} 不一致，声纹识别功能已禁用", dim, EMBEDDING_DIM);
+                extractor.release();
+                extractor = null;
+                enabled = false;
+                return;
+            }
+
             enabled = true;
-            logger.info("说话人嵌入模型初始化成功，嵌入维度: {}", EMBEDDING_DIM);
-        } catch (UnsatisfiedLinkError e) {
-            logger.error("ONNX Runtime native libraries加载失败: {}", e.getMessage());
-            enabled = false;
-        } catch (OrtException e) {
+            logger.info("说话人嵌入模型初始化成功（sherpa-onnx），嵌入维度: {}", dim);
+        } catch (Exception e) {
             logger.error("说话人嵌入模型初始化失败: {}", e.getMessage());
             enabled = false;
         }
@@ -95,7 +97,7 @@ public class SpeakerEmbeddingService {
      * 从PCM音频数据提取说话人嵌入向量
      *
      * @param pcmData 16kHz 16bit单声道PCM数据
-     * @return 192维float32嵌入向量，音频过短或提取失败返回null
+     * @return 256维float32嵌入向量，音频过短或提取失败返回null
      */
     public float[] extractEmbedding(byte[] pcmData) {
         if (!enabled || pcmData == null || pcmData.length == 0) {
@@ -113,29 +115,35 @@ public class SpeakerEmbeddingService {
             return null;
         }
 
+        OnlineStream stream = null;
         try {
-            // 模型输入: [1, num_samples]
-            float[][] input = new float[][] { samples };
+            stream = extractor.createStream();
+            stream.acceptWaveform(samples, SAMPLE_RATE);
+            stream.inputFinished();
 
-            // S1: 使用 try-with-resources 确保 OnnxTensor 和 OrtSession.Result 正确关闭，避免资源泄漏
-            try (OnnxTensor inputTensor = OnnxTensor.createTensor(env, input);
-                 OrtSession.Result result = session.run(Map.of("input", inputTensor))) {
-                float[][] output = (float[][]) result.get(0).getValue();
-
-                if (output != null && output.length > 0 && output[0].length == EMBEDDING_DIM) {
-                    // L2归一化
-                    float[] embedding = output[0];
-                    normalizeL2(embedding);
-                    return embedding;
-                } else {
-                    logger.warn("模型输出维度不匹配，期望: {}，实际: {}",
-                            EMBEDDING_DIM, output != null && output.length > 0 ? output[0].length : 0);
-                    return null;
-                }
+            if (!extractor.isReady(stream)) {
+                logger.warn("声纹提取器未就绪，音频数据可能不足");
+                return null;
             }
-        } catch (OrtException e) {
+
+            float[] embedding = extractor.compute(stream);
+
+            if (embedding == null || embedding.length != EMBEDDING_DIM) {
+                logger.warn("模型输出维度不匹配，期望: {}，实际: {}",
+                        EMBEDDING_DIM, embedding != null ? embedding.length : 0);
+                return null;
+            }
+
+            // L2归一化
+            normalizeL2(embedding);
+            return embedding;
+        } catch (Exception e) {
             logger.error("声纹嵌入提取失败: {}", e.getMessage());
             return null;
+        } finally {
+            if (stream != null) {
+                stream.release();
+            }
         }
     }
 
@@ -221,12 +229,12 @@ public class SpeakerEmbeddingService {
     @PreDestroy
     public void close() {
         try {
-            if (session != null) {
-                session.close();
+            if (extractor != null) {
+                extractor.release();
             }
             enabled = false;
             logger.info("说话人嵌入模型资源已释放");
-        } catch (OrtException e) {
+        } catch (Exception e) {
             logger.error("关闭说话人嵌入模型失败: {}", e.getMessage());
         }
     }

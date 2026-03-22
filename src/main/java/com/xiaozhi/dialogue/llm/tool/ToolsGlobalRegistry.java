@@ -23,6 +23,10 @@ public class ToolsGlobalRegistry implements ToolCallbackResolver {
     protected static final ConcurrentHashMap<String, ToolCallback> allFunction
             = new ConcurrentHashMap<>();
 
+    // 用户接入点工具（按 userId 隔离）
+    private static final ConcurrentHashMap<Integer, ConcurrentHashMap<String, ToolCallback>> userEndpointTools
+            = new ConcurrentHashMap<>();
+
     @Resource
     protected List<GlobalFunction> globalFunctions;
 
@@ -75,6 +79,37 @@ public class ToolsGlobalRegistry implements ToolCallbackResolver {
                 }
         );
         return tempFunctions;
+    }
+
+    // ========== 用户接入点工具管理 ==========
+
+    /**
+     * 注册用户接入点工具
+     */
+    public void registerUserTool(Integer userId, String name, ToolCallback toolCallback) {
+        userEndpointTools.computeIfAbsent(userId, k -> new ConcurrentHashMap<>())
+                .put(name, toolCallback);
+    }
+
+    /**
+     * 卸载用户接入点的单个工具
+     */
+    public void unregisterUserTool(Integer userId, String name) {
+        ConcurrentHashMap<String, ToolCallback> tools = userEndpointTools.get(userId);
+        if (tools != null) {
+            tools.remove(name);
+            if (tools.isEmpty()) {
+                userEndpointTools.remove(userId);
+            }
+        }
+    }
+
+    /**
+     * 获取用户接入点的所有工具
+     */
+    public Map<String, ToolCallback> getUserEndpointTools(Integer userId) {
+        ConcurrentHashMap<String, ToolCallback> tools = userEndpointTools.get(userId);
+        return tools != null ? new HashMap<>(tools) : new HashMap<>();
     }
 
     public interface GlobalFunction{

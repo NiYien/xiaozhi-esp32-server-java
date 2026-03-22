@@ -199,31 +199,53 @@ public class McpServerLoader {
 
         if ("streamable_http".equals(server.getTransportType())) {
             // Streamable HTTP 传输
+            // 解析 URL：SDK 默认 endpoint="/mcp"，会通过 URI.resolve() 覆盖原有路径
+            // 需要将完整路径作为 endpoint 传入，baseUri 只保留 scheme+host+port
+            String fullUrl = server.getServerUrl();
+            URI parsedUri = URI.create(fullUrl);
+            String baseUrl = parsedUri.getScheme() + "://" + parsedUri.getAuthority();
+            String endpointPath = parsedUri.getRawPath();
+            if (endpointPath == null || endpointPath.isEmpty()) {
+                endpointPath = "/mcp";
+            }
+
             HttpClientStreamableHttpTransport.Builder builder =
-                    HttpClientStreamableHttpTransport.builder(server.getServerUrl())
+                    HttpClientStreamableHttpTransport.builder(baseUrl)
+                            .endpoint(endpointPath)
                             .connectTimeout(Duration.ofSeconds(10));
 
-            // 处理认证
-            if (!"none".equals(server.getAuthType()) && server.getAuthToken() != null) {
-                builder.customizeRequest(requestBuilder -> {
+            // 处理认证 + Connection: close（修复阿里百炼等平台的HTTP/1.1连接复用超时问题）
+            builder.customizeRequest(requestBuilder -> {
+                // 强制关闭连接复用，防止后续请求body丢失导致initialize超时
+                requestBuilder.header("Connection", "close");
+                if (!"none".equals(server.getAuthType()) && server.getAuthToken() != null) {
                     if ("bearer".equals(server.getAuthType())) {
                         requestBuilder.header("Authorization", "Bearer " + server.getAuthToken());
                     } else if ("api_key".equals(server.getAuthType())) {
                         requestBuilder.header("Authorization", "ApiKey " + server.getAuthToken());
                     }
-                });
-            }
+                }
+            });
 
             transport = builder.build();
         } else {
             // SSE 传输（默认）
-            // 处理 URL：如果以 /sse 结尾，分离 baseUri 和 sseEndpoint
+            // SDK 的 sseEndpoint 通过 URI.resolve() 拼接，"/sse" 会覆盖原有路径
+            // 需要将完整路径作为 sseEndpoint，baseUri 只保留 scheme+host+port
             String serverUrl = server.getServerUrl();
             String sseEndpoint = "/sse";
-            if (serverUrl.endsWith("/sse")) {
-                sseEndpoint = "/sse";
-                serverUrl = serverUrl.substring(0, serverUrl.length() - 4);
+            URI sseUri = URI.create(serverUrl);
+            String sseBasePath = sseUri.getRawPath();
+
+            if (sseBasePath != null && sseBasePath.endsWith("/sse")) {
+                // URL 以 /sse 结尾：整个路径作为 sseEndpoint
+                sseEndpoint = sseBasePath;
+            } else if (sseBasePath != null && !sseBasePath.isEmpty() && !sseBasePath.equals("/")) {
+                // URL 有路径但不以 /sse 结尾：拼上 /sse
+                sseEndpoint = sseBasePath + "/sse";
             }
+            // baseUrl 只保留 scheme+host+port
+            serverUrl = sseUri.getScheme() + "://" + sseUri.getAuthority();
 
             String authHeader = null;
             if (!"none".equals(server.getAuthType()) && server.getAuthToken() != null) {

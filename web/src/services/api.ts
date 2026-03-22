@@ -109,6 +109,14 @@ export default {
     test: '/mcpServer/test',
     refresh: '/mcpServer/refresh',
   },
+  mcpToken: {
+    query: '/mcpToken',
+    create: '/mcpToken',
+    enable: '/mcpToken',
+    disable: '/mcpToken',
+    delete: '/mcpToken',
+    endpoint: '/mcpToken/endpoint',
+  },
 }
 
 

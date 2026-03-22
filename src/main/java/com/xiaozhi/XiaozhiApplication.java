@@ -17,6 +17,8 @@ public class XiaozhiApplication {
     Logger logger = LoggerFactory.getLogger(XiaozhiApplication.class);
 
     public static void main(String[] args) {
+        // 允许 HttpClient 设置 Connection 等受限头，修复阿里百炼等平台 MCP 连接复用超时问题
+        System.setProperty("jdk.httpclient.allowRestrictedHeaders", "Connection");
         SpringApplication.run(XiaozhiApplication.class, args);
     }
 }

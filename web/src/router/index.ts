@@ -254,6 +254,17 @@ const routes: RouteRecordRaw[] = [
           permission: 'system:config:mcp-server',
         },
       },
+      {
+        path: 'config/mcp-token',
+        name: 'config-mcp-token',
+        component: () => import('../views/config/McpTokenView.vue'),
+        meta: {
+          title: 'router.title.mcpToken',
+          parent: 'router.parent.configManagement',
+          requiresAuth: true,
+          permission: 'system:config:mcp-server',
+        },
+      },
       // 个人中心
       {
         path: 'setting/account',

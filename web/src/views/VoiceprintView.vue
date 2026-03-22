@@ -49,7 +49,7 @@
       :title="t('voiceprint.register')"
       :confirm-loading="registerLoading"
       @ok="handleRegister"
-      @cancel="registerModalVisible = false"
+      @cancel="handleModalCancel"
     >
       <a-form layout="vertical">
         <a-form-item :label="t('voiceprint.voiceprintName')" required>
@@ -79,22 +79,88 @@
             </a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item :label="t('voiceprint.audioFile')" required>
-          <a-upload
-            :before-upload="beforeUpload"
-            :file-list="fileList"
-            :max-count="1"
-            accept=".wav,.pcm"
-            @remove="handleRemoveFile"
-          >
-            <a-button>
-              <upload-outlined />
-              {{ t('voiceprint.selectFile') }}
-            </a-button>
-          </a-upload>
-          <div style="color: #999; font-size: 12px; margin-top: 4px;">
-            {{ t('voiceprint.audioTip') }}
-          </div>
+        <a-form-item :label="t('voiceprint.audioSource')" required>
+          <a-tabs v-model:activeKey="audioTab" @change="handleTabChange">
+            <a-tab-pane key="upload" :tab="t('voiceprint.tabUpload')">
+              <a-upload
+                :before-upload="beforeUpload"
+                :file-list="fileList"
+                :max-count="1"
+                accept=".wav,.pcm"
+                @remove="handleRemoveFile"
+              >
+                <a-button>
+                  <upload-outlined />
+                  {{ t('voiceprint.selectFile') }}
+                </a-button>
+              </a-upload>
+              <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                {{ t('voiceprint.audioTip') }}
+              </div>
+            </a-tab-pane>
+            <a-tab-pane key="record" :tab="t('voiceprint.tabRecord')">
+              <div v-if="!recorder.isSupported.value" style="color: #ff4d4f; padding: 16px 0;">
+                {{ t('voiceprint.micNotSupported') }}
+              </div>
+              <div v-else>
+                <canvas
+                  ref="waveformCanvas"
+                  :width="400"
+                  :height="80"
+                  style="width: 100%; height: 80px; border: 1px solid #f0f0f0; border-radius: 4px;"
+                />
+                <div style="display: flex; align-items: center; margin-top: 8px; gap: 8px;">
+                  <span style="font-size: 14px; font-variant-numeric: tabular-nums; min-width: 50px;">
+                    {{ formatDuration(recorder.duration.value) }}
+                  </span>
+                  <span
+                    v-if="recorder.state.value === 'recording' && recorder.duration.value < 2"
+                    style="color: #faad14; font-size: 12px;"
+                  >
+                    {{ t('voiceprint.minDurationTip') }}
+                  </span>
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                  <a-button
+                    v-if="recorder.state.value === 'idle'"
+                    type="primary"
+                    danger
+                    @click="handleStartRecord"
+                  >
+                    {{ t('voiceprint.startRecord') }}
+                  </a-button>
+                  <a-button
+                    v-if="recorder.state.value === 'recording'"
+                    :disabled="recorder.duration.value < 1.5"
+                    @click="recorder.stop()"
+                  >
+                    {{ t('voiceprint.stopRecord') }}
+                  </a-button>
+                  <a-button
+                    v-if="recorder.state.value === 'stopped'"
+                    @click="recorder.reset()"
+                  >
+                    {{ t('voiceprint.reRecord') }}
+                  </a-button>
+                  <a-button
+                    v-if="recorder.state.value === 'stopped' && recorder.wavBlobUrl.value"
+                    @click="playPreview"
+                  >
+                    {{ t('voiceprint.playPreview') }}
+                  </a-button>
+                </div>
+                <div
+                  v-if="recorder.errorMsg.value === 'permissionDenied'"
+                  style="color: #ff4d4f; font-size: 12px; margin-top: 4px;"
+                >
+                  {{ t('voiceprint.micPermissionDenied') }}
+                </div>
+                <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                  {{ t('voiceprint.recordTip') }}
+                </div>
+              </div>
+            </a-tab-pane>
+          </a-tabs>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -102,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { message } from 'ant-design-vue'
 import { UploadOutlined } from '@ant-design/icons-vue'
 import { useI18n } from 'vue-i18n'
@@ -114,6 +180,7 @@ import {
   getVoiceprintStatus,
 } from '@/services/voiceprint'
 import { queryDevices } from '@/services/device'
+import { useAudioRecorder } from '@/composables/useAudioRecorder'
 import type { SysVoiceprint } from '@/types/voiceprint'
 import type { Device } from '@/types/device'
 
@@ -136,6 +203,11 @@ const registerForm = ref({
   deviceId: undefined as string | undefined,
 })
 const fileList = ref<UploadFile[]>([])
+const audioTab = ref<string>('upload')
+
+// 录音
+const recorder = useAudioRecorder()
+const waveformCanvas = ref<HTMLCanvasElement | null>(null)
 
 // 设备列表
 const deviceLoading = ref(false)
@@ -185,8 +257,8 @@ async function fetchVoiceprints() {
 async function fetchDevices() {
   deviceLoading.value = true
   try {
-    const res = await queryDevices({ start: 0, limit: 1000 })
-    deviceList.value = (res as any).data || []
+    const res = await queryDevices({ start: 1, limit: 1000 })
+    deviceList.value = (res as any).data?.list || []
   } catch (e) {
     console.error(e)
   } finally {
@@ -197,8 +269,35 @@ async function fetchDevices() {
 function showRegisterModal() {
   registerForm.value = { name: '', deviceId: undefined }
   fileList.value = []
+  audioTab.value = 'upload'
+  recorder.reset()
   registerModalVisible.value = true
   fetchDevices()
+}
+
+function handleModalCancel() {
+  recorder.reset()
+  registerModalVisible.value = false
+}
+
+function handleTabChange(key: string | number) {
+  if (key === 'upload') {
+    recorder.reset()
+  } else {
+    fileList.value = []
+    nextTick(() => {
+      if (waveformCanvas.value) {
+        recorder.initCanvas(waveformCanvas.value)
+      }
+    })
+  }
+}
+
+function handleStartRecord() {
+  if (waveformCanvas.value) {
+    recorder.initCanvas(waveformCanvas.value)
+  }
+  recorder.start()
 }
 
 function beforeUpload(file: File) {
@@ -210,6 +309,18 @@ function handleRemoveFile() {
   fileList.value = []
 }
 
+function playPreview() {
+  if (recorder.wavBlobUrl.value) {
+    new Audio(recorder.wavBlobUrl.value).play()
+  }
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
 async function handleRegister() {
   if (!registerForm.value.name.trim()) {
     message.warning(t('voiceprint.nameRequired'))
@@ -219,9 +330,22 @@ async function handleRegister() {
     message.warning(t('voiceprint.deviceRequired'))
     return
   }
-  if (fileList.value.length === 0 || !fileList.value[0].originFileObj) {
-    message.warning(t('voiceprint.audioRequired'))
-    return
+
+  let audioFile: File | null = null
+
+  if (audioTab.value === 'upload') {
+    const firstFile = fileList.value[0]
+    if (!firstFile?.originFileObj) {
+      message.warning(t('voiceprint.audioRequired'))
+      return
+    }
+    audioFile = firstFile.originFileObj as File
+  } else {
+    if (recorder.state.value !== 'stopped' || !recorder.wavFile.value) {
+      message.warning(t('voiceprint.recordNotDone'))
+      return
+    }
+    audioFile = recorder.wavFile.value
   }
 
   registerLoading.value = true
@@ -229,12 +353,13 @@ async function handleRegister() {
     const res = await registerVoiceprint(
       registerForm.value.deviceId,
       registerForm.value.name,
-      fileList.value[0].originFileObj as File
+      audioFile
     )
     const data = res as any
-    if (data.code === 0) {
+    if (data.code === 200) {
       message.success(t('voiceprint.registerSuccess'))
       registerModalVisible.value = false
+      recorder.reset()
       fetchVoiceprints()
       fetchStatus()
     } else {
@@ -253,7 +378,7 @@ async function handleDelete(record: SysVoiceprint) {
   try {
     const res = await deleteVoiceprint(record.voiceprintId)
     const data = res as any
-    if (data.code === 0) {
+    if (data.code === 200) {
       message.success(t('common.deleteSuccess'))
       fetchVoiceprints()
       fetchStatus()
