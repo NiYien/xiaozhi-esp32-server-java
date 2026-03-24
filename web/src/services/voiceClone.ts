@@ -38,6 +38,7 @@ export function uploadVoiceClone(
   cloneName: string,
   provider: string,
   configId: number,
+  speakerId?: string,
   onProgress?: (percent: number) => void
 ): Promise<DataResponse<VoiceClone>> {
   return new Promise((resolve, reject) => {
@@ -46,6 +47,9 @@ export function uploadVoiceClone(
     formData.append('cloneName', cloneName)
     formData.append('provider', provider)
     formData.append('configId', String(configId))
+    if (speakerId) {
+      formData.append('speakerId', speakerId)
+    }
 
     const xhr = new XMLHttpRequest()
     // 使用完整的 API URL，确保与 VITE_API_BASE_URL 前缀一致

@@ -35,10 +35,11 @@ public class VoiceCloneController extends BaseController {
             @Parameter(description = "音频文件") @RequestParam("file") MultipartFile file,
             @Parameter(description = "音色名称") @RequestParam("cloneName") String cloneName,
             @Parameter(description = "提供商(volcengine/aliyun-nls)") @RequestParam("provider") String provider,
-            @Parameter(description = "TTS配置ID") @RequestParam("configId") Integer configId) {
+            @Parameter(description = "TTS配置ID") @RequestParam("configId") Integer configId,
+            @Parameter(description = "声音ID(火山引擎从控制台获取)") @RequestParam(value = "speakerId", required = false) String speakerId) {
         try {
             Integer userId = CmsUtils.getUserId();
-            SysVoiceClone voiceClone = voiceCloneManager.submitClone(userId, cloneName, provider, configId, file);
+            SysVoiceClone voiceClone = voiceCloneManager.submitClone(userId, cloneName, provider, configId, file, speakerId);
             return ResultMessage.success(voiceClone);
         } catch (RuntimeException e) {
             logger.error("音色克隆上传失败: {}", e.getMessage());

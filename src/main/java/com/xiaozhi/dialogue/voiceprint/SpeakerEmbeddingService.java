@@ -187,6 +187,10 @@ public class SpeakerEmbeddingService {
      */
     public static float[] bytesToEmbedding(byte[] bytes) {
         if (bytes == null || bytes.length != EMBEDDING_DIM * 4) {
+            if (bytes != null) {
+                logger.warn("声纹数据维度不匹配: 期望 {} 字节({}维), 实际 {} 字节({}维)，该声纹需要重新注册",
+                        EMBEDDING_DIM * 4, EMBEDDING_DIM, bytes.length, bytes.length / 4);
+            }
             return null;
         }
         ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);

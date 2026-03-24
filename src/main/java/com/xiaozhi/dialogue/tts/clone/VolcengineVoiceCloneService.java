@@ -20,7 +20,8 @@ import java.util.UUID;
 
 /**
  * 火山引擎音色克隆服务实现
- * 调用火山引擎音色克隆 REST API 进行音色训练
+ * 调用火山引擎声音复刻 V3 API 进行音色训练
+ * 文档：https://www.volcengine.com/docs/6561/2227958
  */
 @Service
 public class VolcengineVoiceCloneService implements VoiceCloneService {
@@ -29,9 +30,9 @@ public class VolcengineVoiceCloneService implements VoiceCloneService {
 
     private static final String PROVIDER_NAME = "volcengine";
 
-    // 火山引擎音色克隆API地址
-    private static final String CLONE_API_URL = "https://openspeech.bytedance.com/api/v1/mega_tts/audio/upload";
-    private static final String STATUS_API_URL = "https://openspeech.bytedance.com/api/v1/mega_tts/status";
+    // 声音复刻 V3 API 地址
+    private static final String CLONE_API_URL = "https://openspeech.bytedance.com/api/v3/tts/voice_clone";
+    private static final String STATUS_API_URL = "https://openspeech.bytedance.com/api/v3/tts/get_voice";
     private static final MediaType JSON_MEDIA = MediaType.parse("application/json; charset=utf-8");
 
     private final OkHttpClient client = HttpUtil.client;
@@ -56,57 +57,43 @@ public class VolcengineVoiceCloneService implements VoiceCloneService {
             byte[] audioBytes = Files.readAllBytes(Path.of(samplePath));
             String audioBase64 = Base64.getEncoder().encodeToString(audioBytes);
 
-            // 构建请求参数
+            // speaker_id 由前端传入（从火山引擎控制台获取）
+            String speakerId = cloneName;
+
+            // 构建 V3 请求参数
             JsonObject requestJson = new JsonObject();
+            requestJson.addProperty("speaker_id", speakerId);
+            requestJson.addProperty("language", 0);
 
-            JsonObject app = new JsonObject();
-            app.addProperty("appid", config.getAppId());
-            app.addProperty("token", config.getApiKey());
-            app.addProperty("cluster", "volcano_mega");
-            requestJson.add("app", app);
-
-            JsonObject user = new JsonObject();
-            user.addProperty("uid", UUID.randomUUID().toString());
-            requestJson.add("user", user);
-
+            // 音频数据（V3 格式：audio 对象，字段名为 data 和 format）
             JsonObject audio = new JsonObject();
-            audio.addProperty("audio_data", audioBase64);
-            audio.addProperty("audio_format", samplePath.endsWith(".mp3") ? "mp3" : "wav");
-            audio.addProperty("speaker_id", cloneName);
+            audio.addProperty("data", audioBase64);
+            audio.addProperty("format", samplePath.endsWith(".mp3") ? "mp3" : "wav");
             requestJson.add("audio", audio);
 
-            JsonObject request_obj = new JsonObject();
-            String taskId = UUID.randomUUID().toString();
-            request_obj.addProperty("reqid", taskId);
-            request_obj.addProperty("operation", "submit");
-            requestJson.add("request", request_obj);
+            logger.info("[火山引擎] 提交音色克隆(V3): appId={}, speakerId={}", config.getAppId(), speakerId);
 
-            String bearerToken = "Bearer " + config.getApiKey();
             RequestBody requestBody = RequestBody.create(requestJson.toString(), JSON_MEDIA);
 
+            // V3 认证方式：X-Api-App-Key + X-Api-Access-Key
             Request request = new Request.Builder()
                     .url(CLONE_API_URL)
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", bearerToken)
+                    .addHeader("X-Api-App-Key", config.getAppId())
+                    .addHeader("X-Api-Access-Key", config.getApiKey())
+                    .addHeader("X-Api-Request-Id", UUID.randomUUID().toString())
                     .post(requestBody)
                     .build();
 
             try (Response response = client.newCall(request).execute()) {
+                String responseBody = response.body() != null ? response.body().string() : "无响应体";
+                logger.info("[火山引擎] 音色克隆响应: code={}, body={}", response.code(), responseBody);
                 if (!response.isSuccessful()) {
-                    String errorBody = response.body() != null ? response.body().string() : "无响应体";
-                    throw new RuntimeException("提交克隆任务失败: " + response.code() + " " + errorBody);
+                    throw new RuntimeException("提交克隆任务失败: " + response.code() + " " + responseBody);
                 }
 
-                String responseBody = response.body() != null ? response.body().string() : "";
-                JsonObject jsonResponse = JsonParser.parseString(responseBody).getAsJsonObject();
-
-                // 检查是否有taskId返回
-                if (jsonResponse.has("task_id")) {
-                    return jsonResponse.get("task_id").getAsString();
-                }
-
-                // 使用请求中的reqid作为taskId
-                return taskId;
+                // 返回 speakerId 作为任务标识
+                return speakerId;
             }
         } catch (IOException e) {
             logger.error("[火山引擎] 提交音色克隆任务失败", e);
@@ -122,27 +109,18 @@ public class VolcengineVoiceCloneService implements VoiceCloneService {
         }
 
         try {
+            // V3 状态查询只需 speaker_id
             JsonObject requestJson = new JsonObject();
+            requestJson.addProperty("speaker_id", taskId);
 
-            JsonObject app = new JsonObject();
-            app.addProperty("appid", config.getAppId());
-            app.addProperty("token", config.getApiKey());
-            app.addProperty("cluster", "volcano_mega");
-            requestJson.add("app", app);
-
-            JsonObject request_obj = new JsonObject();
-            request_obj.addProperty("reqid", UUID.randomUUID().toString());
-            request_obj.addProperty("task_id", taskId);
-            request_obj.addProperty("operation", "query");
-            requestJson.add("request", request_obj);
-
-            String bearerToken = "Bearer " + config.getApiKey();
             RequestBody requestBody = RequestBody.create(requestJson.toString(), JSON_MEDIA);
 
             Request request = new Request.Builder()
                     .url(STATUS_API_URL)
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", bearerToken)
+                    .addHeader("X-Api-App-Key", config.getAppId())
+                    .addHeader("X-Api-Access-Key", config.getApiKey())
+                    .addHeader("X-Api-Request-Id", UUID.randomUUID().toString())
                     .post(requestBody)
                     .build();
 
@@ -155,11 +133,12 @@ public class VolcengineVoiceCloneService implements VoiceCloneService {
                 String responseBody = response.body() != null ? response.body().string() : "";
                 JsonObject jsonResponse = JsonParser.parseString(responseBody).getAsJsonObject();
 
+                // V3 status: 0=NotFound, 1=Training, 2=Success, 3=Failed, 4=Active
                 if (jsonResponse.has("status")) {
-                    String status = jsonResponse.get("status").getAsString();
+                    int status = jsonResponse.get("status").getAsInt();
                     return switch (status) {
-                        case "success", "ready", "completed" -> VoiceCloneStatus.READY;
-                        case "failed", "error" -> VoiceCloneStatus.FAILED;
+                        case 2, 4 -> VoiceCloneStatus.READY;
+                        case 3 -> VoiceCloneStatus.FAILED;
                         default -> VoiceCloneStatus.TRAINING;
                     };
                 }
@@ -173,61 +152,13 @@ public class VolcengineVoiceCloneService implements VoiceCloneService {
 
     @Override
     public String getVoiceId(String taskId, int configId) {
-        SysConfig config = configService.selectConfigById(configId);
-        if (config == null) {
-            return null;
-        }
-
-        try {
-            JsonObject requestJson = new JsonObject();
-
-            JsonObject app = new JsonObject();
-            app.addProperty("appid", config.getAppId());
-            app.addProperty("token", config.getApiKey());
-            app.addProperty("cluster", "volcano_mega");
-            requestJson.add("app", app);
-
-            JsonObject request_obj = new JsonObject();
-            request_obj.addProperty("reqid", UUID.randomUUID().toString());
-            request_obj.addProperty("task_id", taskId);
-            request_obj.addProperty("operation", "query");
-            requestJson.add("request", request_obj);
-
-            String bearerToken = "Bearer " + config.getApiKey();
-            RequestBody requestBody = RequestBody.create(requestJson.toString(), JSON_MEDIA);
-
-            Request request = new Request.Builder()
-                    .url(STATUS_API_URL)
-                    .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", bearerToken)
-                    .post(requestBody)
-                    .build();
-
-            try (Response response = client.newCall(request).execute()) {
-                if (!response.isSuccessful()) {
-                    return null;
-                }
-                String responseBody = response.body() != null ? response.body().string() : "";
-                JsonObject jsonResponse = JsonParser.parseString(responseBody).getAsJsonObject();
-
-                if (jsonResponse.has("voice_id")) {
-                    return jsonResponse.get("voice_id").getAsString();
-                }
-                // 如果没有专门的 voice_id 字段，使用 speaker_id
-                if (jsonResponse.has("speaker_id")) {
-                    return jsonResponse.get("speaker_id").getAsString();
-                }
-                return taskId;
-            }
-        } catch (IOException e) {
-            logger.error("[火山引擎] 获取克隆音色ID失败", e);
-            return null;
-        }
+        // taskId 即 speakerId，训练完成后直接用于 TTS 调用
+        return taskId;
     }
 
     @Override
     public void deleteVoice(String voiceId, int configId) {
-        // 火山引擎音色克隆目前不提供删除API，记录日志即可
+        // 火山引擎声音复刻目前不提供删除API
         logger.info("[火山引擎] 删除克隆音色: voiceId={}, configId={}", voiceId, configId);
     }
 }

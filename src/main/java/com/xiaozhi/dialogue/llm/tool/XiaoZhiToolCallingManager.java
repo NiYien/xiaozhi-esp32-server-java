@@ -109,7 +109,15 @@ public class XiaoZhiToolCallingManager implements ToolCallingManager, Applicatio
             toolCallbacks.add(toolCallback);
         }
 
-        return toolCallbacks.stream().map(ToolCallback::getToolDefinition).toList();
+        List<ToolDefinition> toolDefinitions = toolCallbacks.stream().map(ToolCallback::getToolDefinition).toList();
+        if (logger.isDebugEnabled()) {
+            logger.debug("解析工具定义，总计: {} 个", toolDefinitions.size());
+            for (ToolDefinition td : toolDefinitions) {
+                logger.debug("工具定义 - name: {}, description: {}, inputSchema: {}",
+                        td.name(), td.description(), td.inputSchema());
+            }
+        }
+        return toolDefinitions;
     }
 
     @Override

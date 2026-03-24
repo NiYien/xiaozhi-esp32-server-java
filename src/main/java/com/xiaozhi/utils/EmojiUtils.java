@@ -253,4 +253,46 @@ public class EmojiUtils {
         return  filteredText;
     }
 
+    // ========== Markdown 清理（TTS 兜底） ==========
+
+    private static final Pattern MARKDOWN_BOLD = Pattern.compile("\\*\\*(.+?)\\*\\*");
+    private static final Pattern MARKDOWN_ITALIC = Pattern.compile("\\*(.+?)\\*");
+    private static final Pattern MARKDOWN_CODE = Pattern.compile("`(.+?)`");
+    private static final Pattern MARKDOWN_LINK = Pattern.compile("\\[(.+?)\\]\\(.+?\\)");
+    private static final Pattern MARKDOWN_HEADING = Pattern.compile("(?m)^#{1,6}\\s+");
+    private static final Pattern MARKDOWN_LIST = Pattern.compile("(?m)^\\s*[-*+]\\s+");
+    private static final Pattern MARKDOWN_BLOCKQUOTE = Pattern.compile("(?m)^>\\s*");
+    private static final Pattern MARKDOWN_PIPE = Pattern.compile("\\|");
+    private static final Pattern MULTIPLE_SPACES = Pattern.compile("\\s{2,}");
+
+    /**
+     * 清理文本中的 Markdown 格式符号，确保 TTS 只朗读纯文本
+     */
+    public static String stripMarkdown(String text) {
+        if (!StrUtil.isNotBlank(text)) {
+            return text;
+        }
+        // 替换换行为空格
+        text = text.replace("\n", " ").replace("\r", " ");
+        // 加粗 **text** → text
+        text = MARKDOWN_BOLD.matcher(text).replaceAll("$1");
+        // 斜体 *text* → text
+        text = MARKDOWN_ITALIC.matcher(text).replaceAll("$1");
+        // 行内代码 `code` → code
+        text = MARKDOWN_CODE.matcher(text).replaceAll("$1");
+        // 链接 [text](url) → text
+        text = MARKDOWN_LINK.matcher(text).replaceAll("$1");
+        // 标题 # ## ### → 移除
+        text = MARKDOWN_HEADING.matcher(text).replaceAll("");
+        // 列表 - * + → 移除
+        text = MARKDOWN_LIST.matcher(text).replaceAll("");
+        // 引用 > → 移除
+        text = MARKDOWN_BLOCKQUOTE.matcher(text).replaceAll("");
+        // 表格分隔符 | → 空格
+        text = MARKDOWN_PIPE.matcher(text).replaceAll(" ");
+        // 合并多余空格
+        text = MULTIPLE_SPACES.matcher(text).replaceAll(" ");
+        return text.trim();
+    }
+
 }

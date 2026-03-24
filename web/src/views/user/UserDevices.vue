@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useAvatar } from '@/composables/useAvatar'
@@ -167,6 +167,15 @@ async function handleAddDevice() {
 onMounted(() => {
   loadDevices()
   loadRoles()
+})
+
+// 定时刷新设备列表（每30秒）
+const refreshTimer = setInterval(() => {
+  loadDevices()
+}, 30000)
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
 })
 </script>
 

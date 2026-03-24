@@ -99,8 +99,9 @@ public class SentenceHelper {
             if (shouldSendSentence && currentSentence.length() >= MIN_SENTENCE_LENGTH) {
                 String sentence = currentSentence.toString().trim();
 
-                // 过滤颜文字
+                // 过滤颜文字和 Markdown 符号
                 sentence = EmojiUtils.filterKaomoji(sentence);
+                sentence = EmojiUtils.stripMarkdown(sentence);
 
                 if (containsSubstantialContent(sentence)) {
                     // 记住检测到的句子

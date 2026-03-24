@@ -129,6 +129,7 @@ public class VoiceprintRecognitionService {
                 return;
             }
 
+            int totalCount = voiceprints.size();
             List<CachedVoiceprint> cachedList = voiceprints.stream()
                     .map(vp -> {
                         float[] emb = SpeakerEmbeddingService.bytesToEmbedding(vp.getEmbedding());
@@ -137,8 +138,14 @@ public class VoiceprintRecognitionService {
                     .filter(java.util.Objects::nonNull)
                     .toList();
 
+            int skippedCount = totalCount - cachedList.size();
+            if (skippedCount > 0) {
+                logger.warn("设备 {} 有 {} 条声纹因维度不匹配被跳过（模型已升级），请删除旧声纹并重新注册",
+                        deviceId, skippedCount);
+            }
+
             deviceVoiceprintCache.put(deviceId, cachedList);
-            logger.info("设备 {} 声纹缓存已加载，共 {} 条", deviceId, cachedList.size());
+            logger.info("设备 {} 声纹缓存已加载，共 {} 条（跳过 {} 条）", deviceId, cachedList.size(), skippedCount);
         } catch (Exception e) {
             logger.error("加载设备 {} 声纹缓存失败: {}", deviceId, e.getMessage());
         }

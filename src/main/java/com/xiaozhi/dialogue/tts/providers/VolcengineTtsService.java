@@ -12,8 +12,12 @@ import okhttp3.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
 
@@ -22,6 +26,7 @@ public class VolcengineTtsService implements TtsService {
 
     private static final String PROVIDER_NAME = "volcengine";
     private static final String API_URL = "https://openspeech.bytedance.com/api/v1/tts";
+    private static final String API_URL_V3 = "https://openspeech.bytedance.com/api/v3/tts/unidirectional";
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     // 重试机制常量
@@ -84,8 +89,13 @@ public class VolcengineTtsService implements TtsService {
         int attempts = 0;
         while (attempts < MAX_RETRY_ATTEMPTS) {
             try {
-                // 生成音频文件名
-                String audioFileName = getAudioFileName();
+                // 生成音频文件名（克隆音色使用 mp3 格式）
+                String audioFileName;
+                if (voiceName != null && voiceName.startsWith("S_")) {
+                    audioFileName = UUID.randomUUID().toString().replace("-", "") + ".mp3";
+                } else {
+                    audioFileName = getAudioFileName();
+                }
                 String audioFilePath = outputPath + audioFileName;
 
                 // 发送POST请求
@@ -118,8 +128,19 @@ public class VolcengineTtsService implements TtsService {
 
     /**
      * 发送POST请求到火山引擎API，获取语音合成结果
+     * 克隆音色（S_开头）使用V3 API，普通音色使用V1 API
      */
     private boolean sendRequest(String text, String audioFilePath) throws Exception {
+        if (voiceName != null && voiceName.startsWith("S_")) {
+            return sendRequestV3(text, audioFilePath);
+        }
+        return sendRequestV1(text, audioFilePath);
+    }
+
+    /**
+     * V1 API：普通音色合成
+     */
+    private boolean sendRequestV1(String text, String audioFilePath) throws Exception {
         try {
             // 构建请求参数
             JsonObject requestJson = new JsonObject();
@@ -216,6 +237,109 @@ public class VolcengineTtsService implements TtsService {
         } catch (Exception e) {
             logger.error("发送TTS请求时发生错误", e);
             throw new TtsException("发送TTS请求失败", e);
+        }
+    }
+
+    /**
+     * V3 API：克隆音色合成（HTTP Chunked NDJSON）
+     */
+    private boolean sendRequestV3(String text, String audioFilePath) throws Exception {
+        try {
+            // 构建 V3 请求参数
+            JsonObject requestJson = new JsonObject();
+
+            // user
+            JsonObject user = new JsonObject();
+            user.addProperty("uid", UUID.randomUUID().toString());
+            requestJson.add("user", user);
+
+            // req_params
+            JsonObject reqParams = new JsonObject();
+            reqParams.addProperty("text", text);
+            reqParams.addProperty("speaker", voiceName);
+            requestJson.add("req_params", reqParams);
+
+            // audio_params（流式接口用 mp3 避免多次 wav header 问题）
+            JsonObject audioParams = new JsonObject();
+            audioParams.addProperty("format", "mp3");
+            audioParams.addProperty("sample_rate", AudioUtils.SAMPLE_RATE);
+            reqParams.add("audio_params", audioParams);
+
+            RequestBody requestBody = RequestBody.create(JSON, requestJson.toString());
+
+            Request request = new Request.Builder()
+                    .url(API_URL_V3)
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("X-Api-App-Key", appId)
+                    .addHeader("X-Api-Access-Key", accessToken)
+                    .addHeader("X-Api-Resource-Id", "seed-icl-1.0")
+                    .addHeader("X-Api-Request-Id", UUID.randomUUID().toString())
+                    .post(requestBody)
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    String errorBody = response.body() != null ? response.body().string() : "无响应体";
+                    logger.error("V3 TTS请求失败: {} {}, 错误信息: {}", response.code(), response.message(), errorBody);
+                    return false;
+                }
+
+                if (response.body() == null) {
+                    logger.error("V3 TTS响应体为空");
+                    return false;
+                }
+
+                // V3 响应是 Chunked NDJSON，逐行解析并拼接音频数据
+                ByteArrayOutputStream audioBuffer = new ByteArrayOutputStream();
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(response.body().byteStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        line = line.trim();
+                        if (line.isEmpty()) continue;
+
+                        JsonObject chunk = JsonParser.parseString(line).getAsJsonObject();
+
+                        // 检查是否有音频数据
+                        if (chunk.has("data") && !chunk.get("data").isJsonNull()) {
+                            String base64Audio = chunk.get("data").getAsString();
+                            if (!base64Audio.isEmpty()) {
+                                byte[] audioData = Base64.getDecoder().decode(base64Audio);
+                                audioBuffer.write(audioData);
+                            }
+                        }
+
+                        // 检查结束标识或错误
+                        if (chunk.has("code")) {
+                            int code = chunk.get("code").getAsInt();
+                            if (code != 20000000 && code != 0) {
+                                String message = chunk.has("message") ? chunk.get("message").getAsString() : "未知错误";
+                                logger.error("V3 TTS返回错误: code={}, message={}", code, message);
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                // 保存音频文件
+                byte[] allAudioData = audioBuffer.toByteArray();
+                if (allAudioData.length == 0) {
+                    logger.error("V3 TTS未返回音频数据");
+                    return false;
+                }
+
+                File audioFile = new File(audioFilePath);
+                try (FileOutputStream fout = new FileOutputStream(audioFile)) {
+                    fout.write(allAudioData);
+                }
+                return true;
+            }
+        } catch (java.io.IOException e) {
+            logger.error("V3 TTS请求IO错误", e);
+            throw new TtsException("V3 TTS请求失败", e);
+        } catch (Exception e) {
+            logger.error("V3 TTS请求错误", e);
+            throw new TtsException("V3 TTS请求失败", e);
         }
     }
 

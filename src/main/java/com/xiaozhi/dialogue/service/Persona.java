@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.Usage;
@@ -75,6 +76,13 @@ public class Persona {
 
     private static final Logger logger = LoggerFactory.getLogger(Persona.class);
     private static final String TOOL_CONTEXT_SESSION_KEY = "session";
+
+    // 当会话使用了 MCP 工具时，自动追加到系统消息中，引导 LLM 用口语风格回复
+    private static final String TTS_VOICE_PROMPT = """
+            重要：你的回复将通过语音合成（TTS）播放给用户听。请遵守以下规则：
+            1. 用简洁的口语风格回答，像朋友聊天一样自然
+            2. 不要使用任何 Markdown 格式（如 **加粗**、- 列表、# 标题、| 表格等）
+            3. 直接说重点内容，不要罗列所有数据，用户只需要关键信息""";
 
     private ChatSession session;
 
@@ -192,9 +200,25 @@ public class Persona {
         }
 
         conversation.add(userMessage);
-        List<Message> messages = conversation.messages();
+        List<Message> messages = new ArrayList<>(conversation.messages());
+
+        // 当会话使用了 MCP 工具时，追加 TTS 语音输出提示词，引导 LLM 用口语风格回复
+        if (useFunctionCall && session.getToolCallbacks().stream()
+                .anyMatch(tc -> tc.getToolDefinition().name().startsWith("mcp_"))) {
+            String ttsPrompt = conversation.getRole().getTtsPrompt();
+            messages.add(new SystemMessage(
+                    StringUtils.hasText(ttsPrompt) ? ttsPrompt : TTS_VOICE_PROMPT));
+        }
+
         Prompt prompt = new Prompt(messages, chatOptions);
         Flux<ChatResponse> chatFlux = chatModel.stream(prompt);
+        chatFlux = chatFlux.doOnError(throwable -> {
+            if (throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException wcre) {
+                logger.error("LLM API 错误 - Status: {}, Body: {}", wcre.getStatusCode(), wcre.getResponseBodyAsString());
+            } else {
+                logger.error("LLM 流式调用错误: {}", throwable.getMessage());
+            }
+        });
         chatFlux = chatFlux.doOnNext(chatResponse -> {
             Instant assistantMessageCreatedAt = Instant.now();
             boolean isFirst = ttft.compareAndSet(null,assistantMessageCreatedAt);

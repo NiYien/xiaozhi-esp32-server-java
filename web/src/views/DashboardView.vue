@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUserStore } from '@/store/user'
 import { useAvatar } from '@/composables/useAvatar'
+import { checkToken } from '@/services/user'
 import dayjs from 'dayjs'
 // @ts-ignore
 import jsonp from 'jsonp'
@@ -50,6 +51,18 @@ const welcomeText = computed(() => {
 })
 
 const userInfo = computed(() => userStore.userInfo)
+
+// 页面加载时刷新用户信息（获取最新统计数据）
+onMounted(async () => {
+  try {
+    const res = await checkToken()
+    if (res.code === 200 && res.data?.user) {
+      userStore.setUserInfo(res.data.user)
+    }
+  } catch {
+    // 静默处理，不影响页面展示
+  }
+})
 
 const userAvatar = computed(() => {
   if (userInfo.value?.avatar) {

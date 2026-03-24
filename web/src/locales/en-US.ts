@@ -352,6 +352,12 @@ export default {
     voicePitch: 'Voice Pitch',
     voicePitchTip: 'Control voice pitch, range 0.5-2.0, default 1.0',
 
+    // TTS voice prompt
+    ttsPromptConfig: 'TTS Voice Prompt',
+    ttsPrompt: 'Voice Output Prompt',
+    ttsPromptTip: 'When MCP tools are used, this prompt is appended to guide the LLM to reply in spoken style. Leave empty for default.',
+    ttsPromptPlaceholder: 'E.g.: Reply in concise spoken language, avoid Markdown, focus on key info.',
+
     // Role prompt
     rolePrompt: 'Role Prompt',
     agentPrompt: 'Agent mode uses built-in prompts, no additional setup required',
@@ -916,6 +922,8 @@ export default {
     audioTip: 'WAV/MP3 format, 10-600 seconds, sample rate >= 16kHz, mono',
     preview: 'Preview',
     confirmDelete: 'Are you sure you want to delete this cloned voice? This cannot be undone.',
+    speakerId: 'Speaker ID',
+    pleaseEnterSpeakerId: 'Enter Speaker ID from Volcengine console (e.g. S_xxxxxx)',
     pleaseEnterName: 'Please enter voice name',
     pleaseSelectConfig: 'Please select TTS config',
     pleaseSelectFile: 'Please select audio file',
@@ -929,6 +937,18 @@ export default {
     volcengine: 'Volcengine',
     aliyunNls: 'Aliyun NLS',
     cloneVoice: 'Clone Voice',
+    tabUpload: 'Upload File',
+    tabRecord: 'Live Recording',
+    startRecord: 'Start Recording',
+    stopRecord: 'Stop Recording',
+    reRecord: 'Re-record',
+    playRecording: 'Play Preview',
+    minDurationTip: 'Voice cloning requires at least 10 seconds of recording',
+    micNotSupported: 'Recording is not supported in this browser. Please use HTTPS or upload an audio file',
+    micPermissionDenied: 'Microphone permission denied. Please allow microphone access in browser settings',
+    recordNotDone: 'Please complete recording first',
+    recordTip: 'Please record clear speech in a quiet environment',
+    audioSource: 'Audio Source',
   },
   voiceprint: {
     title: 'Voiceprint Management',

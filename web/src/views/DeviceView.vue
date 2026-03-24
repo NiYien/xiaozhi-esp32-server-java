@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import { useTable } from '@/composables/useTable'
@@ -363,6 +363,15 @@ const onTableChange = (pag: TablePaginationConfig) => {
 // 初始化（非阻塞式加载）
 getRoles()
 fetchData()
+
+// 定时刷新设备列表（每30秒）
+const refreshTimer = setInterval(() => {
+  fetchData()
+}, 30000)
+
+onUnmounted(() => {
+  clearInterval(refreshTimer)
+})
 </script>
 
 <template>

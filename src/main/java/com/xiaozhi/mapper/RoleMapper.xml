@@ -32,6 +32,7 @@
         <result property="knowledgeBaseIds" column="knowledgeBaseIds" />
         <result property="ragTopK" column="ragTopK" />
         <result property="ragThreshold" column="ragThreshold" />
+        <result property="ttsPrompt" column="ttsPrompt" />
     </resultMap>
 
     <sql id="Role_Column_List">
@@ -42,6 +43,7 @@
         sys_role.vadSpeechTh, sys_role.vadSilenceTh, sys_role.vadEnergyTh, sys_role.vadSilenceMs,
         sys_role.comfort_words,
         sys_role.knowledgeBaseIds, sys_role.ragTopK, sys_role.ragThreshold,
+        sys_role.ttsPrompt,
         sys_role.userId, sys_role.state, sys_role.isDefault, sys_role.createTime
     </sql>
 
@@ -114,6 +116,7 @@
             <if test="knowledgeBaseIds != null">knowledgeBaseIds = #{knowledgeBaseIds},</if>
             <if test="ragTopK != null">ragTopK = #{ragTopK},</if>
             <if test="ragThreshold != null">ragThreshold = #{ragThreshold},</if>
+            <if test="ttsPrompt != null">ttsPrompt = #{ttsPrompt},</if>
         </set>
         WHERE
             roleId = #{roleId}
@@ -130,7 +133,7 @@
     </update>
 
     <insert id="add" useGeneratedKeys="true" keyProperty="roleName" parameterType="com.xiaozhi.entity.SysRole">
-        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault, comfort_words, knowledgeBaseIds, ragTopK, ragThreshold ) VALUES (
+        INSERT INTO sys_role ( avatar, roleName, roleDesc, voiceName, ttsPitch, ttsSpeed, modelId, ttsId, sttId, memoryType, temperature, topP, userId, isDefault, comfort_words, knowledgeBaseIds, ragTopK, ragThreshold, ttsPrompt ) VALUES (
             #{avatar},
             #{roleName},
             #{roleDesc},
@@ -154,7 +157,8 @@
             #{comfortWords},
             #{knowledgeBaseIds},
             #{ragTopK},
-            #{ragThreshold}
+            #{ragThreshold},
+            #{ttsPrompt}
         )
     </insert>
 

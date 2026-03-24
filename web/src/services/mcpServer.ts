@@ -31,42 +31,42 @@ export interface TestConnectionResult {
 }
 
 /**
- * 查询 MCP Server 列表
+ * 查询 MCP 服务 列表
  */
 export function queryMcpServers(params: Partial<McpServerQueryParams>) {
   return http.get<McpServer[]>(api.mcpServer.query, params)
 }
 
 /**
- * 添加 MCP Server
+ * 添加 MCP 服务
  */
 export function addMcpServer(data: Partial<McpServer>) {
   return http.post(api.mcpServer.add, data as Record<string, unknown>)
 }
 
 /**
- * 更新 MCP Server
+ * 更新 MCP 服务
  */
 export function updateMcpServer(data: Partial<McpServer>) {
   return http.put(api.mcpServer.update, data as Record<string, unknown>)
 }
 
 /**
- * 删除 MCP Server
+ * 删除 MCP 服务
  */
 export function deleteMcpServer(serverId: number) {
   return http.delete(`${api.mcpServer.delete}/${serverId}`)
 }
 
 /**
- * 测试 MCP Server 连接
+ * 测试 MCP 服务 连接
  */
 export function testMcpServerConnection(data: Partial<McpServer>) {
   return http.post<TestConnectionResult>(api.mcpServer.test, data as Record<string, unknown>)
 }
 
 /**
- * 刷新所有 MCP Server 工具注册
+ * 刷新所有 MCP 服务 工具注册
  */
 export function refreshMcpServers() {
   return http.post(api.mcpServer.refresh)

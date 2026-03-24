@@ -83,9 +83,10 @@ public class VoiceCloneManager {
      * @param provider  提供商名称
      * @param configId  TTS配置ID
      * @param file      音频文件
+     * @param speakerId 声音ID（火山引擎从控制台获取，可选）
      * @return 创建的克隆记录
      */
-    public SysVoiceClone submitClone(Integer userId, String cloneName, String provider, Integer configId, MultipartFile file) {
+    public SysVoiceClone submitClone(Integer userId, String cloneName, String provider, Integer configId, MultipartFile file, String speakerId) {
         // 检查数量限制
         int count = voiceCloneMapper.countByUserId(userId);
         if (count >= MAX_CLONES_PER_USER) {
@@ -111,7 +112,9 @@ public class VoiceCloneManager {
         // 提交到云API训练
         try {
             VoiceCloneService cloneService = getCloneService(provider);
-            String taskId = cloneService.submitCloneTask(samplePath, cloneName, configId);
+            // 火山引擎使用前端传入的 speakerId，其他提供商使用 cloneName
+            String cloneIdentifier = (speakerId != null && !speakerId.isEmpty()) ? speakerId : cloneName;
+            String taskId = cloneService.submitCloneTask(samplePath, cloneIdentifier, configId);
             voiceClone.setTaskId(taskId);
             voiceClone.setStatus("training");
             voiceCloneMapper.update(voiceClone);
@@ -341,9 +344,9 @@ public class VoiceCloneManager {
                 dir.mkdirs();
             }
 
-            String filePath = fullPath + "/" + fileName;
-            file.transferTo(new File(filePath));
-            return filePath;
+            File destFile = new File(fullPath + "/" + fileName);
+            file.transferTo(destFile.getAbsoluteFile());
+            return destFile.getAbsolutePath();
         } catch (Exception e) {
             throw new RuntimeException("保存音频文件失败: " + e.getMessage(), e);
         }

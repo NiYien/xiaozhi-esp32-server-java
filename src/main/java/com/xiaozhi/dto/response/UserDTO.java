@@ -47,6 +47,9 @@ public class UserDTO {
     @Schema(description = "设备总数", example = "3")
     private Integer totalDevice;
 
+    @Schema(description = "活跃设备数", example = "1")
+    private Integer aliveNumber;
+
     @Schema(description = "Token使用限制", example = "10")
     private Integer tokenLimit;
 

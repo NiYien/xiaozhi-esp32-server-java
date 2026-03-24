@@ -191,4 +191,10 @@ public class SysRole extends Base<SysRole> {
      */
     @Schema(description = "安抚词列表，JSON数组格式")
     private String comfortWords;
+
+    /**
+     * TTS语音输出提示词，当使用MCP工具时自动追加到系统消息
+     */
+    @Schema(description = "TTS语音输出提示词")
+    private String ttsPrompt;
 }

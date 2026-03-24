@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { message } from 'ant-design-vue'
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/services/voiceClone'
 import type { VoiceClone } from '@/services/voiceClone'
 import { queryConfigs } from '@/services/config'
+import { useAudioRecorder } from '@/composables/useAudioRecorder'
 
 const { t } = useI18n()
 
@@ -29,6 +30,7 @@ const uploading = ref(false)
 const uploadProgress = ref(0)
 const uploadForm = reactive({
   cloneName: '',
+  speakerId: '',
   provider: 'volcengine',
   configId: undefined as number | undefined,
   file: null as File | null,
@@ -40,6 +42,11 @@ const ttsConfigs = ref<{ configId: number; configName: string; provider: string 
 // 试听相关
 const previewLoading = ref<number | null>(null)
 const audioPlayer = ref<HTMLAudioElement | null>(null)
+
+// 录音相关
+const audioTab = ref<string>('upload')
+const recorder = useAudioRecorder()
+const waveformCanvas = ref<HTMLCanvasElement | null>(null)
 
 // 轮询定时器
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -101,7 +108,7 @@ async function fetchData() {
 // 加载 TTS 配置
 async function fetchTtsConfigs() {
   try {
-    const res = await queryConfigs({ configType: 'tts', start: 0, limit: 100 })
+    const res = await queryConfigs({ configType: 'tts', start: 1, limit: 100 })
     if (res.code === 200 && res.data) {
       ttsConfigs.value = (res.data.list || [])
         .filter((c: any) => c.provider === 'volcengine' || c.provider === 'aliyun-nls')
@@ -124,10 +131,13 @@ function filteredConfigs() {
 // 打开上传弹窗
 function showUploadDialog() {
   uploadForm.cloneName = ''
+  uploadForm.speakerId = ''
   uploadForm.provider = 'volcengine'
   uploadForm.configId = undefined
   uploadForm.file = null
   uploadProgress.value = 0
+  audioTab.value = 'upload'
+  recorder.reset()
   uploadVisible.value = true
 }
 
@@ -150,28 +160,45 @@ async function handleUpload() {
     message.warning(t('voiceClone.pleaseEnterName'))
     return
   }
+  if (uploadForm.provider === 'volcengine' && !uploadForm.speakerId) {
+    message.warning(t('voiceClone.pleaseEnterSpeakerId'))
+    return
+  }
   if (!uploadForm.configId) {
     message.warning(t('voiceClone.pleaseSelectConfig'))
     return
   }
-  if (!uploadForm.file) {
-    message.warning(t('voiceClone.pleaseSelectFile'))
-    return
+
+  let file: File | null = null
+  if (audioTab.value === 'upload') {
+    if (!uploadForm.file) {
+      message.warning(t('voiceClone.pleaseSelectFile'))
+      return
+    }
+    file = uploadForm.file
+  } else {
+    if (recorder.state.value !== 'stopped' || !recorder.wavFile.value) {
+      message.warning(t('voiceClone.recordNotDone'))
+      return
+    }
+    file = recorder.wavFile.value
   }
 
   uploading.value = true
   try {
     await uploadVoiceClone(
-      uploadForm.file,
+      file,
       uploadForm.cloneName,
       uploadForm.provider,
       uploadForm.configId,
+      uploadForm.speakerId || undefined,
       (percent) => {
         uploadProgress.value = percent
       }
     )
     message.success(t('voiceClone.uploadSuccess'))
     uploadVisible.value = false
+    recorder.reset()
     await fetchData()
   } catch (error: any) {
     message.error(error.message || t('voiceClone.uploadFailed'))
@@ -226,6 +253,39 @@ function updatePolling() {
   } else if (!hasTraining && pollTimer) {
     clearInterval(pollTimer)
     pollTimer = null
+  }
+}
+
+// 录音辅助函数
+function handleStartRecord() {
+  if (waveformCanvas.value) {
+    recorder.initCanvas(waveformCanvas.value)
+  }
+  recorder.start()
+}
+
+function playPreview() {
+  if (recorder.wavBlobUrl.value) {
+    new Audio(recorder.wavBlobUrl.value).play()
+  }
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+function handleTabChange(key: string | number) {
+  if (key === 'upload') {
+    recorder.reset()
+  } else {
+    uploadForm.file = null
+    nextTick(() => {
+      if (waveformCanvas.value) {
+        recorder.initCanvas(waveformCanvas.value)
+      }
+    })
   }
 }
 
@@ -308,7 +368,7 @@ onUnmounted(() => {
       :title="t('voiceClone.addClone')"
       :confirm-loading="uploading"
       @ok="handleUpload"
-      @cancel="uploadVisible = false"
+      @cancel="() => { recorder.reset(); uploadVisible = false }"
     >
       <a-form layout="vertical">
         <a-form-item :label="t('voiceClone.cloneName')" required>
@@ -325,6 +385,13 @@ onUnmounted(() => {
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item v-if="uploadForm.provider === 'volcengine'" :label="t('voiceClone.speakerId')" required>
+          <a-input
+            v-model:value="uploadForm.speakerId"
+            :placeholder="t('voiceClone.pleaseEnterSpeakerId')"
+            :maxlength="50"
+          />
+        </a-form-item>
         <a-form-item :label="t('voiceClone.ttsConfig')" required>
           <a-select
             v-model:value="uploadForm.configId"
@@ -335,17 +402,61 @@ onUnmounted(() => {
             </a-select-option>
           </a-select>
         </a-form-item>
-        <a-form-item :label="t('voiceClone.audioFile')" required>
-          <a-upload
-            :before-upload="beforeUpload"
-            :max-count="1"
-            accept=".wav,.mp3"
-          >
-            <a-button>
-              {{ t('voiceClone.selectFile') }}
-            </a-button>
-          </a-upload>
-          <div class="upload-tip">{{ t('voiceClone.audioTip') }}</div>
+        <a-form-item :label="t('voiceClone.audioSource')" required>
+          <a-tabs v-model:activeKey="audioTab" @change="handleTabChange">
+            <a-tab-pane key="upload" :tab="t('voiceClone.tabUpload')">
+              <a-upload
+                :before-upload="beforeUpload"
+                :max-count="1"
+                accept=".wav,.mp3"
+              >
+                <a-button>
+                  {{ t('voiceClone.selectFile') }}
+                </a-button>
+              </a-upload>
+              <div class="upload-tip">{{ t('voiceClone.audioTip') }}</div>
+            </a-tab-pane>
+            <a-tab-pane key="record" :tab="t('voiceClone.tabRecord')">
+              <div v-if="!recorder.isSupported.value" style="color: #ff4d4f; padding: 16px 0;">
+                {{ t('voiceClone.micNotSupported') }}
+              </div>
+              <div v-else>
+                <canvas ref="waveformCanvas" :width="400" :height="80"
+                  style="width: 100%; height: 80px; border: 1px solid #f0f0f0; border-radius: 4px;" />
+                <div style="display: flex; align-items: center; margin-top: 8px; gap: 8px;">
+                  <span style="font-size: 14px; font-variant-numeric: tabular-nums; min-width: 50px;">
+                    {{ formatDuration(recorder.duration.value) }}
+                  </span>
+                  <span v-if="recorder.state.value === 'recording' && recorder.duration.value < 10"
+                    style="color: #faad14; font-size: 12px;">
+                    {{ t('voiceClone.minDurationTip') }}
+                  </span>
+                </div>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                  <a-button v-if="recorder.state.value === 'idle'" type="primary" danger @click="handleStartRecord">
+                    {{ t('voiceClone.startRecord') }}
+                  </a-button>
+                  <a-button v-if="recorder.state.value === 'recording'" :disabled="recorder.duration.value < 10" @click="recorder.stop()">
+                    {{ t('voiceClone.stopRecord') }}
+                  </a-button>
+                  <a-button v-if="recorder.state.value === 'stopped'" @click="recorder.reset()">
+                    {{ t('voiceClone.reRecord') }}
+                  </a-button>
+                  <a-button v-if="recorder.state.value === 'stopped' && recorder.wavBlobUrl.value"
+                    @click="playPreview">
+                    {{ t('voiceClone.playRecording') }}
+                  </a-button>
+                </div>
+                <div v-if="recorder.errorMsg.value === 'permissionDenied'"
+                  style="color: #ff4d4f; font-size: 12px; margin-top: 4px;">
+                  {{ t('voiceClone.micPermissionDenied') }}
+                </div>
+                <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                  {{ t('voiceClone.recordTip') }}
+                </div>
+              </div>
+            </a-tab-pane>
+          </a-tabs>
         </a-form-item>
         <a-progress v-if="uploading" :percent="uploadProgress" size="small" />
       </a-form>

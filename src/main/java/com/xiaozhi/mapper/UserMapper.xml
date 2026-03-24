@@ -29,7 +29,10 @@
 
     <select id="selectUserByUsername" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List"></include>
+        <include refid="Base_Column_List"></include>,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId) AS totalDevice,
+        (SELECT count(*) FROM sys_message LEFT JOIN sys_device ON sys_device.deviceId = sys_message.deviceId WHERE sys_device.userId = sys_user.userId) AS totalMessage,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId AND sys_device.state = 1) AS aliveNumber
         FROM
             sys_user
         WHERE
@@ -39,7 +42,10 @@
 
     <select id="selectUserByWxOpenId" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List"></include>
+        <include refid="Base_Column_List"></include>,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId) AS totalDevice,
+        (SELECT count(*) FROM sys_message LEFT JOIN sys_device ON sys_device.deviceId = sys_message.deviceId WHERE sys_device.userId = sys_user.userId) AS totalMessage,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId AND sys_device.state = 1) AS aliveNumber
         FROM
             sys_user
         WHERE
@@ -49,7 +55,10 @@
 
     <select id="selectUserByEmail" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List"></include>
+        <include refid="Base_Column_List"></include>,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId) AS totalDevice,
+        (SELECT count(*) FROM sys_message LEFT JOIN sys_device ON sys_device.deviceId = sys_message.deviceId WHERE sys_device.userId = sys_user.userId) AS totalMessage,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId AND sys_device.state = 1) AS aliveNumber
         FROM
             sys_user
         WHERE
@@ -59,7 +68,10 @@
 
     <select id="selectUserByTel" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List"></include>
+        <include refid="Base_Column_List"></include>,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId) AS totalDevice,
+        (SELECT count(*) FROM sys_message LEFT JOIN sys_device ON sys_device.deviceId = sys_message.deviceId WHERE sys_device.userId = sys_user.userId) AS totalMessage,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId AND sys_device.state = 1) AS aliveNumber
         FROM
             sys_user
         WHERE
@@ -145,7 +157,10 @@
 
     <select id="selectUserByUserId" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List"></include>
+        <include refid="Base_Column_List"></include>,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId) AS totalDevice,
+        (SELECT count(*) FROM sys_message LEFT JOIN sys_device ON sys_device.deviceId = sys_message.deviceId WHERE sys_device.userId = sys_user.userId) AS totalMessage,
+        (SELECT count(*) FROM sys_device WHERE sys_device.userId = sys_user.userId AND sys_device.state = 1) AS aliveNumber
         FROM
             sys_user
         WHERE

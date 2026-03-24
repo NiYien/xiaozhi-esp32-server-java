@@ -130,6 +130,8 @@ export interface RoleFormData {
   knowledgeBaseIds: number[]
   ragTopK?: number
   ragThreshold?: number
+  // TTS 语音输出提示词
+  ttsPrompt?: string
 }
 
 // 测试语音参数

@@ -33,12 +33,10 @@ public class McpSessionManager {
         
         // 获取所有排除的工具列表（全局和角色级别）
         Set<String> excludedTools = mcpToolExcludeService.getExcludedTools(userId, roleId);
-        
-        // 从全局工具注册表中移除被排除的工具
-        excludedTools.forEach(toolName -> {
-            toolsGlobalRegistry.unregisterFunction(toolName);
-        });
-        
+
+        // 排除逻辑仅在会话级别过滤，不从全局注册表中移除工具
+        // 避免一个用户/角色的排除配置影响所有用户
+
         // 处理设备指定的functionNames（如果设备有指定特定的函数列表）
         String functionNames = chatSession.getSysDevice().getFunctionNames();
         if (functionNames != null && !functionNames.isEmpty()) {

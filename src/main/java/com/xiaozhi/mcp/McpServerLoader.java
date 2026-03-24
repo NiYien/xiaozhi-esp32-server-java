@@ -293,13 +293,44 @@ public class McpServerLoader {
         SyncMcpToolCallbackProvider provider = new SyncMcpToolCallbackProvider(mcpClient);
         ToolCallback[] callbacks = provider.getToolCallbacks();
 
-        for (ToolCallback callback : callbacks) {
+        for (int i = 0; i < callbacks.length; i++) {
+            ToolCallback callback = callbacks[i];
             String originalName = callback.getToolDefinition().name();
-            String prefixedName = serverCode + "_" + originalName;
-            toolsGlobalRegistry.registerFunction(prefixedName, callback);
+            // 生成 OpenAI 兼容的工具名称 [a-zA-Z0-9_-]{1,64}
+            // 如果原始名称已经是 ASCII 兼容的，直接使用；否则用 serverCode_tool_N 格式
+            String prefixedName;
+            if (isAsciiCompatible(originalName)) {
+                String prefix = serverCode + "_";
+                String safeName = originalName;
+                if (prefix.length() + safeName.length() > 64) {
+                    safeName = safeName.substring(0, 64 - prefix.length());
+                }
+                prefixedName = prefix + safeName;
+            } else {
+                prefixedName = serverCode + "_tool_" + i;
+            }
+            // 包装 ToolCallback，确保发送给 LLM 的工具名称也是 sanitized 的
+            ToolCallback sanitizedCallback = new SanitizedToolCallback(callback, prefixedName);
+            toolsGlobalRegistry.registerFunction(prefixedName, sanitizedCallback);
             toolNames.add(prefixedName);
+            logger.info("注册 MCP 工具: {} (原始名: {})", prefixedName, originalName);
         }
 
         return toolNames;
+    }
+
+    /**
+     * 检查工具名称是否为 OpenAI 兼容的 ASCII 格式 [a-zA-Z0-9_-]
+     */
+    private boolean isAsciiCompatible(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        for (char c : name.toCharArray()) {
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-')) {
+                return false;
+            }
+        }
+        return true;
     }
 }

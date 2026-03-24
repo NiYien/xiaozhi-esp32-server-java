@@ -67,9 +67,10 @@ public class ToolsGlobalRegistry implements ToolCallbackResolver {
      * @return a map of all registered functions
      */
     public Map<String, ToolCallback> getAllFunctions(ChatSession chatSession) {
-        // 注意：这里不再自动注册所有全局函数到allFunction中
-        // 而是返回一个临时的Map，由McpSessionManager统一管理工具注册
         Map<String, ToolCallback> tempFunctions = new HashMap<>();
+        // 包含通过 registerFunction 注册的工具（MCP Server 工具等）
+        tempFunctions.putAll(allFunction);
+        // 包含 GlobalFunction 接口实现的工具（IoT 等内置工具）
         globalFunctions.forEach(
                 globalFunction -> {
                     ToolCallback toolCallback = globalFunction.getFunctionCallTool(chatSession);

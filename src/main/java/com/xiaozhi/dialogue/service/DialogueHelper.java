@@ -117,8 +117,9 @@ class DialogueHelper implements ChatConverter {
             if (shouldSendSentence && currentSentence.length() >= effectiveMinLength) {
                 String sentence = currentSentence.toString().trim();
 
-                // 过滤颜文字
+                // 过滤颜文字和 Markdown 符号
                 sentence = EmojiUtils.filterKaomoji(sentence);
+                sentence = EmojiUtils.stripMarkdown(sentence);
 
                 if (containsSubstantialContent(sentence, effectiveMinLength)) {
 
@@ -145,8 +146,9 @@ class DialogueHelper implements ChatConverter {
 
     public void onComplete(FluxSink sink) {
         String sentence = currentSentence.toString().trim();
-        // 过滤颜文字
+        // 过滤颜文字和 Markdown 符号
         sentence = EmojiUtils.filterKaomoji(sentence);
+        sentence = EmojiUtils.stripMarkdown(sentence);
         if (containsSubstantialContent(sentence)) {
             sink.next(sentence);
         }

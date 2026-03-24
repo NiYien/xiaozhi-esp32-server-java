@@ -25,6 +25,9 @@ public class SessionActivityMonitor {
     // 定时任务执行器，在 start() 时创建
     private ScheduledExecutorService scheduler;
 
+    // 设备服务，用于超时清理时更新设备状态
+    private SysDeviceService deviceService;
+
     public SessionActivityMonitor(SessionRegistry sessionRegistry) {
         this.sessionRegistry = sessionRegistry;
     }
@@ -41,6 +44,8 @@ public class SessionActivityMonitor {
                       boolean checkInactiveSession,
                       int inactiveTimeOutSeconds,
                       Consumer<String> removeSessionCallback) {
+        this.deviceService = deviceService;
+
         if (checkInactiveSession) {
             scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -104,6 +109,18 @@ public class SessionActivityMonitor {
                             if (session.getPersona() != null) {
                                 // 不涉及ASR了
                                 session.getPersona().sendGoodbyeMessage();
+                            }
+                            // 超时清理时更新数据库设备状态为离线
+                            SysDevice device = session.getSysDevice();
+                            if (device != null && deviceService != null) {
+                                try {
+                                    deviceService.update(new SysDevice()
+                                            .setDeviceId(device.getDeviceId())
+                                            .setState(SysDevice.DEVICE_STATE_OFFLINE));
+                                    logger.info("超时清理 - 设备 {} 状态已更新为离线", device.getDeviceId());
+                                } catch (Exception e) {
+                                    logger.error("超时清理 - 更新设备 {} 状态失败", device.getDeviceId(), e);
+                                }
                             }
                             if (session instanceof WebSocketSession) {
                                 // 解绑WebSocket会话，回收Session对象。

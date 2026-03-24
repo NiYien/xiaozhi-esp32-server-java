@@ -87,7 +87,8 @@ const formData = reactive<RoleFormData>({
   comfortWords: [] as string[],
   knowledgeBaseIds: [] as number[],
   ragTopK: undefined,
-  ragThreshold: undefined
+  ragThreshold: undefined,
+  ttsPrompt: ''
 })
 
 // 编辑状态
@@ -453,7 +454,8 @@ const resetForm = () => {
     comfortWords: [],
     knowledgeBaseIds: [],
     ragTopK: undefined,
-    ragThreshold: undefined
+    ragThreshold: undefined,
+    ttsPrompt: ''
   })
 }
 
@@ -1676,6 +1678,29 @@ if (!editingRoleId.value) {
                   <div style="margin-top: 8px; color: var(--ant-color-text-tertiary); font-size: 12px;">
                     安抚词在工具调用（如搜索、播放音乐等）执行前播放，用于安抚等待中的用户。留空则不播放安抚词。
                   </div>
+                </a-form-item>
+              </a-col>
+            </a-row>
+
+            <!-- TTS语音输出提示词 -->
+            <a-divider orientation="left">{{ t('role.ttsPromptConfig') }}</a-divider>
+
+            <a-row :gutter="20">
+              <a-col :span="24">
+                <a-form-item>
+                  <template #label>
+                    <span>{{ t('role.ttsPrompt') }}</span>
+                    <a-tooltip :title="t('role.ttsPromptTip')">
+                      <a-button type="link" size="small" style="padding: 0 4px;">?</a-button>
+                    </a-tooltip>
+                  </template>
+                  <a-textarea
+                    v-model:value="formData.ttsPrompt"
+                    :placeholder="t('role.ttsPromptPlaceholder')"
+                    :rows="4"
+                    :maxlength="500"
+                    show-count
+                  />
                 </a-form-item>
               </a-col>
             </a-row>
