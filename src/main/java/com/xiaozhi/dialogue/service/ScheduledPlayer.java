@@ -51,9 +51,9 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
     // 等待所有音频在终端设备播放完成后再发送TTS结束消息
     private static final long WAIT_TIME_MS_TO_SEND_STOP = 120;
 
-    // 句子间隔：补偿预缓冲(2帧) + 预缓冲后第一帧(1帧) + 最后一帧(1帧) + 句子间隔(1帧) = 5帧 = 300ms
-    // 这样可以避免句子粘连，给设备足够的缓冲时间
-    private static final long SENTENCE_GAP_NS = OPUS_FRAME_SEND_INTERVAL_NS * 5;
+    // 句子间自然停顿时间（1帧 = 60ms），避免句子粘连
+    // 每个句子开头会重新 burst 预缓冲，无需额外补偿帧
+    private static final long SENTENCE_GAP_NS = OPUS_FRAME_SEND_INTERVAL_NS * 1;
 
     // 句子间隔标记（空帧），发送线程遇到时跳过发送并增加playPosition间隔
     private static final Speech SENTENCE_GAP_MARKER = new Speech(new byte[0]);
@@ -220,8 +220,23 @@ public class ScheduledPlayer extends PlayerWithOpusFile {
 
             if (speech != null) {
                 if (speech == SENTENCE_GAP_MARKER) {
-                    // 句子间隔：推进playPosition，不发送音频
-                    playPosition += SENTENCE_GAP_NS;
+                    // 先等待句间间隔，避免句子粘连
+                    long gapTargetTime = startTimestamp + playPosition + SENTENCE_GAP_NS;
+                    long now = System.nanoTime();
+                    long gapDelay = gapTargetTime - now;
+                    if (gapDelay > 0) {
+                        try {
+                            Thread.sleep(gapDelay / 1_000_000L, (int) (gapDelay % 1_000_000L));
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            running = false;
+                            return;
+                        }
+                    }
+                    // 重置 burst 预缓冲，让新句子的前几帧立即发送，
+                    // 补充因句间间隔而耗空的 ESP32 I2S DMA buffer
+                    startTimestamp = 0;
+                    playPosition = BURST_PREBUFFER_NS;
                     continue;
                 }
                 // 有数据，发送音频帧

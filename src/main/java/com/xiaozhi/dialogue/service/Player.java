@@ -78,7 +78,6 @@ public abstract class Player{
      */
     protected void sendOpusFrame( byte[] opusFrame)  {
         messageService.sendBinaryMessage(session, opusFrame);
-        // logger.info("发送Opus帧数据: {}", opusFrame.length);
     }
 
     /**

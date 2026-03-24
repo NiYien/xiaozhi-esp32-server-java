@@ -108,7 +108,7 @@ public class VoskSttService implements SttService {
         // 将原始音频数据转换为WAV格式并保存
         String fileName = AudioUtils.saveAsWav(audioData);
 
-        try (Recognizer recognizer = new Recognizer(model, AudioUtils.SAMPLE_RATE)) {
+        try (Recognizer recognizer = new Recognizer(model, AudioUtils.STT_SAMPLE_RATE)) {
             ByteArrayInputStream audioStream = new ByteArrayInputStream(audioData);
 
             byte[] buffer = new byte[4096];
@@ -167,7 +167,7 @@ public class VoskSttService implements SttService {
 
         // 使用平台线程池执行识别任务，避免虚拟线程与 JNI native 内存绑定冲突
         Future<?> future = recognizerExecutor.submit(() -> {
-            try (Recognizer recognizer = new Recognizer(model, AudioUtils.SAMPLE_RATE)) {
+            try (Recognizer recognizer = new Recognizer(model, AudioUtils.STT_SAMPLE_RATE)) {
                 while (!isCompleted.get() || !audioQueue.isEmpty()) {
                     try {
                         byte[] audioChunk = audioQueue.poll(100, TimeUnit.MILLISECONDS);

@@ -29,7 +29,7 @@ COPY ./src ./src
 COPY ./db ./db
 COPY ./lib ./lib
 COPY pom.xml ./
-RUN mvn -Dmaven.repo.local=/root/.m2/repository package -DskipTests
+RUN mvn -Dmaven.repo.local=/root/.m2/repository package -Dmaven.test.skip=true
 
 # 提取项目版本号
 RUN APP_VERSION=$(grep -A1 "<artifactId>xiaozhi.server</artifactId>" pom.xml | grep "<version>" | sed -e 's/<version>//' -e 's/<\/version>//' -e 's/[[:space:]]//g') && \

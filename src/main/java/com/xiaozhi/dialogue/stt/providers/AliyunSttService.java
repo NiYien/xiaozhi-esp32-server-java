@@ -92,7 +92,7 @@ public class AliyunSttService implements SttService {
         var param = RecognitionParam.builder()
                 .model(modelName)
                 .format("pcm")
-                .sampleRate(AudioUtils.SAMPLE_RATE) // 使用16000Hz采样率
+                .sampleRate(AudioUtils.STT_SAMPLE_RATE) // 使用16000Hz采样率
                 .apiKey(apiKey)
                 .build();
 
@@ -149,7 +149,7 @@ public class AliyunSttService implements SttService {
                 .apiKey(apiKey)
                 .model(model)
                 .format("pcm")
-                .sampleRate(AudioUtils.SAMPLE_RATE)
+                .sampleRate(AudioUtils.STT_SAMPLE_RATE)
                 .transcriptionEnabled(true)
                 .sourceLanguage("auto")
                 .build();
@@ -332,7 +332,7 @@ public class AliyunSttService implements SttService {
             OmniRealtimeTranscriptionParam transcriptionParam = new OmniRealtimeTranscriptionParam();
             // transcriptionParam.setLanguage("zh");
             transcriptionParam.setInputAudioFormat("pcm");
-            transcriptionParam.setInputSampleRate(AudioUtils.SAMPLE_RATE);
+            transcriptionParam.setInputSampleRate(AudioUtils.STT_SAMPLE_RATE);
             // 配置会话参数
             OmniRealtimeConfig config = OmniRealtimeConfig.builder()
                     .modalities(Collections.singletonList(OmniRealtimeModality.TEXT))

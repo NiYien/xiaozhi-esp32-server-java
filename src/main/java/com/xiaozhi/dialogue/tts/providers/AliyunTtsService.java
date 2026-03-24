@@ -358,8 +358,7 @@ public class AliyunTtsService implements TtsService {
                         baos.write(buffer, 0, bytesRead);
                     }
                     byte[] pcm24k = AudioUtils.wavToPcm(baos.toByteArray());
-                    byte[] pcm16k = AudioUtils.resamplePcm(pcm24k, 24000, 16000);
-                    AudioUtils.saveAsWav(new File(outPath).toPath(), pcm16k);
+                    AudioUtils.saveAsWav(new File(outPath).toPath(), pcm24k);
                     return true;
                 } catch (Exception e) {
                     return false;

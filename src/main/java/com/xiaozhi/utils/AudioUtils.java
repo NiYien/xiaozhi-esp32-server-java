@@ -20,13 +20,14 @@ public class AudioUtils {
     public static final String AUDIO_PATH = "audio/";
     public static final int AUDIO_RETENTION_DAYS = 30;
     private static final Logger logger = org.slf4j.LoggerFactory.getLogger(AudioUtils.class);
-    public static final int FRAME_SIZE = 960;
-    public static final int SAMPLE_RATE = 16000; // 采样率
+    public static final int OPUS_FRAME_DURATION_MS = 60; // OPUS帧持续时间（毫秒）
+    public static final int SAMPLE_RATE = 24000; // TTS 输出采样率（匹配 ESP32 codec 24kHz）
+    public static final int STT_SAMPLE_RATE = 16000; // STT 输入采样率（ESP32 麦克风录音 16kHz）
+    public static final int FRAME_SIZE = SAMPLE_RATE * OPUS_FRAME_DURATION_MS / 1000; // 每帧样本数（24kHz×60ms=1440）
     public static final int CHANNELS = 1; // 单声道
     public static final int BITRATE = 48000; // 48kbps比特率（高质量，接近透明质量）
     public static final int SAMPLE_FORMAT = 1; // AV_SAMPLE_FMT_S16 = 16位PCM
     public static final int BUFFER_SIZE = 512; // 窗口大小
-    public static final int OPUS_FRAME_DURATION_MS = 60; // OPUS帧持续时间（毫秒）
 
     /**
      * 将原始音频数据保存为MP3文件
@@ -316,6 +317,12 @@ public class AudioUtils {
             throw new IOException("不是有效的WAV文件格式");
         }
 
+        // 读取 WAV 头中的实际采样率（偏移 24-27，小端序）
+        int wavSampleRate = (wavData[24] & 0xFF) | ((wavData[25] & 0xFF) << 8)
+                | ((wavData[26] & 0xFF) << 16) | ((wavData[27] & 0xFF) << 24);
+        int wavChannels = (wavData[22] & 0xFF) | ((wavData[23] & 0xFF) << 8);
+        logger.info("WAV文件采样率: {}Hz, 声道数: {}, 文件: {}", wavSampleRate, wavChannels, wavPath);
+
         // 查找data子块
         int dataOffset = -1;
         for (int i = 12; i < wavData.length - 4; i++) {
@@ -335,6 +342,12 @@ public class AudioUtils {
         // 提取PCM数据
         byte[] pcmData = new byte[dataSize];
         System.arraycopy(wavData, dataOffset, pcmData, 0, dataSize);
+
+        // 如果 WAV 实际采样率与目标 TTS 采样率不一致，自动重采样
+        if (wavSampleRate > 0 && wavSampleRate != SAMPLE_RATE) {
+            logger.info("WAV采样率{}Hz与目标{}Hz不一致，执行重采样", wavSampleRate, SAMPLE_RATE);
+            pcmData = resamplePcm(pcmData, wavSampleRate, SAMPLE_RATE);
+        }
 
         return pcmData;
     }

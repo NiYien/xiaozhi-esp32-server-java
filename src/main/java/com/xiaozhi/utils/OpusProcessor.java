@@ -247,7 +247,8 @@ public class OpusProcessor {
      */
     public OpusDecoder initDecoder() {
         try {
-            OpusDecoder decoder = new OpusDecoder(SAMPLE_RATE, CHANNELS);
+            // STT 解码使用 16kHz（ESP32 麦克风录音采样率）
+            OpusDecoder decoder = new OpusDecoder(AudioUtils.STT_SAMPLE_RATE, CHANNELS);
             decoder.setGain(0);
             return decoder;
         } catch (OpusException e) {

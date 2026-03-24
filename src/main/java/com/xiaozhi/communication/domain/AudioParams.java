@@ -18,6 +18,6 @@ public class AudioParams {
     public static final AudioParams Opus = new AudioParams()
             .setChannels(1)
             .setFormat("opus")
-            .setSampleRate(16000)
+            .setSampleRate(24000)
             .setFrameDuration(60);
 }

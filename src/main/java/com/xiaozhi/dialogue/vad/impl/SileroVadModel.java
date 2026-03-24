@@ -68,7 +68,7 @@ public class SileroVadModel implements VadModel {
 
             OnnxTensor inputTensor = OnnxTensor.createTensor(env, x);
             OnnxTensor stateTensor = OnnxTensor.createTensor(env, localState);
-            OnnxTensor srTensor = OnnxTensor.createTensor(env, new long[] { AudioUtils.SAMPLE_RATE });
+            OnnxTensor srTensor = OnnxTensor.createTensor(env, new long[] { AudioUtils.STT_SAMPLE_RATE });
 
             try {
                 OrtSession.Result result = session.run(Map.of(

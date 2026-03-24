@@ -164,7 +164,7 @@ public class AliyunNlsTtsService extends AbstractTtsService {
             // 设置语音输出格式
             synthesizer.setFormat(OutputFormatEnum.WAV);
             // 设置采样率
-            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+            synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_24K);
             // 设置语音
             synthesizer.setVoice(getVoiceName());
             // 设置音量
@@ -284,7 +284,7 @@ public class AliyunNlsTtsService extends AbstractTtsService {
                 // 设置为PCM格式，避免WAV头的处理问题
                 synthesizer.setFormat(OutputFormatEnum.PCM);
                 // 设置采样率
-                synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_16K);
+                synthesizer.setSampleRate(SampleRateEnum.SAMPLE_RATE_24K);
                 // 设置语音
                 synthesizer.setVoice(getVoiceName());
                 // 设置音量

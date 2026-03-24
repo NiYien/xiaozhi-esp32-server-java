@@ -111,7 +111,7 @@ public class SherpaOnnxTtsService implements TtsService {
             // 将 float[] samples 转为 16-bit PCM byte[]
             byte[] pcmData = AudioUtils.floatToPcm16(audio.getSamples());
 
-            // 如果采样率不是16000，需要重采样
+            // 如果采样率与目标 TTS 采样率(24kHz)不一致，需要重采样
             int sampleRate = audio.getSampleRate();
             if (sampleRate != AudioUtils.SAMPLE_RATE) {
                 pcmData = AudioUtils.resamplePcm(pcmData, sampleRate, AudioUtils.SAMPLE_RATE);
