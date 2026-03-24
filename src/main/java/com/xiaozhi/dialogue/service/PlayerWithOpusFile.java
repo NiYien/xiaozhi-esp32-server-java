@@ -36,6 +36,8 @@ public abstract class PlayerWithOpusFile extends Player {
     private Path audioPath = null;
     private OpusFile opusFile = null;
     private Instant opusFileCreatedAt = null;
+    // OGG Opus granule position 计数器（48kHz 采样率，每帧 60ms = 2880 samples）
+    private long granulePosition = 0;
 
     @Getter
     @Setter
@@ -85,6 +87,7 @@ public abstract class PlayerWithOpusFile extends Player {
 
                 // 创建OpusFile用于写入
                 opusFile = new OpusFile(fos, oi, ot);
+                granulePosition = 0;
             } catch (FileNotFoundException e) {
                 throw new RuntimeException(e);
             }
@@ -109,8 +112,10 @@ public abstract class PlayerWithOpusFile extends Player {
             openOpusFile();
         }
         if(opusFile!=null){
-            // 创建OpusAudioData并写入文件
+            // 创建OpusAudioData并设置 granule position（OGG Opus 规范要求 48kHz 计数）
             OpusAudioData audioData = new OpusAudioData(opusFrame);
+            granulePosition += 2880; // 48000Hz × 60ms = 2880 samples per frame
+            audioData.setGranulePosition(granulePosition);
             opusFile.writeAudioData(audioData);
         }
 

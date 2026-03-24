@@ -636,9 +636,13 @@ public class AudioUtils {
         try (FileOutputStream fos = new FileOutputStream(filePath);
              OpusFile opusFile = new OpusFile(fos, oi, ot)) {
 
-            // 写入每个Opus帧
+            // 写入每个Opus帧，设置 granule position（OGG Opus 规范要求 48kHz 计数）
+            long granulePosition = 0;
             for (byte[] frame : opusFrames) {
-                opusFile.writeAudioData(new OpusAudioData(frame));
+                OpusAudioData audioData = new OpusAudioData(frame);
+                granulePosition += 2880; // 48000Hz × 60ms = 2880 samples per frame
+                audioData.setGranulePosition(granulePosition);
+                opusFile.writeAudioData(audioData);
             }
         }
     }
