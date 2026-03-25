@@ -89,12 +89,17 @@ emqx:
     - emqx-log:/opt/emqx/log
   networks:
     - app-network
+  healthcheck:
+    test: ["CMD", "emqx", "ping"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
   restart: unless-stopped
 ```
 
 Server 服务的 MQTT broker URL 应使用 Docker 内部网络名：
 - `XIAOZHI_MQTT_BROKER_URL=tcp://emqx:1883`（替换现有的 `tcp://host.docker.internal:1883`）
-- Server 服务需添加 `depends_on: emqx`
+- Server 服务需添加 `depends_on` 并使用 `condition: service_healthy`（与 MySQL 的 depends_on 模式一致）
 
 ### 4.2 服务端配置
 
@@ -348,9 +353,9 @@ server:
 
 ### MQTT+UDP 方案（新增）
 ```
-设备 → UDP(加密Opus) → UdpAudioServer → AES解密 → MqttUdpAudioChannel → ChatSession → Opus解码 → VAD → STT
+设备 → UDP(加密Opus) → UdpAudioServer → AES解密 → MqttUdpSession → ChatSession → Opus解码 → VAD → STT
                                                                                                           ↓
-设备 ← UDP(加密Opus) ← UdpAudioServer ← AES加密 ← MqttUdpAudioChannel ← ChatSession ← Opus编码 ← TTS ← LLM
+设备 ← UDP(加密Opus) ← UdpAudioServer ← AES加密 ← MqttUdpSession ← ChatSession ← Opus编码 ← TTS ← LLM
 
 设备 → MQTT(JSON控制) → MqttDialogueHandler → SessionManager → DialogueService
 设备 ← MQTT(JSON控制) ← MqttDialogueHandler ←
@@ -377,7 +382,9 @@ server:
 | `docker-compose.yml` | 新增 EMQX 服务（含 networks），暴露 UDP 端口，server 添加 depends_on |
 | `application.yml` | 新增 UDP 配置，MQTT enabled 默认值 |
 | `application-dev.yml` | MQTT/UDP 开发环境配置 |
-| `communication/common/SessionManager.java` | 修复 `closeSession()` 的 `instanceof` 硬编码，支持 MQTT+UDP session |
+| `communication/common/SessionManager.java` | 修复 `closeSession()` 的 `instanceof WebSocketSession` 硬编码，改为通用逻辑 |
+| `communication/common/SessionActivityMonitor.java` | 修复第 100、125 行 `instanceof WebSocketSession` 硬编码，使超时检查和清理逻辑兼容 `MqttUdpSession` |
+| `communication/common/BoundDeviceInitializer.java` | 修复第 62 行 `instanceof WebSocketSession` 判断，`MqttUdpSession` 也应设为 ONLINE 状态 |
 | `pom.xml` | 无需新增依赖（AES/NIO 均为 JDK 内置） |
 
 ### 测试文件
