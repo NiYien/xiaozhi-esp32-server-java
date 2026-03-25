@@ -1,0 +1,33 @@
+{
+    "factory_stt_infos": [
+        {
+            "name": "aliyun",
+            "models": [
+                { "model_name": "paraformer-realtime-v2", "desc": "Paraformer 实时语音识别 V2" },
+                { "model_name": "paraformer-realtime-v1", "desc": "Paraformer 实时语音识别 V1" },
+                { "model_name": "gummy-realtime", "desc": "Gummy 实时语音识别" },
+                { "model_name": "qwen-turbo-realtime", "desc": "Qwen 实时语音识别" },
+                { "model_name": "qwen2.5-turbo-realtime", "desc": "Qwen2.5 实时语音识别" }
+            ]
+        },
+        {
+            "name": "tencent",
+            "models": [
+                { "model_name": "16k_zh", "desc": "中文通用" },
+                { "model_name": "16k_en", "desc": "英文" },
+                { "model_name": "16k_zh_large", "desc": "中文大模型增强" },
+                { "model_name": "16k_zh_dialect", "desc": "中文方言" },
+                { "model_name": "16k_ja", "desc": "日语" },
+                { "model_name": "16k_ko", "desc": "韩语" },
+                { "model_name": "16k_multi_lang", "desc": "多语种" }
+            ]
+        },
+        {
+            "name": "volcengine",
+            "models": [
+                { "model_name": "volc.bigasr.sauc.duration", "desc": "豆包流式语音识别（小时版）" },
+                { "model_name": "volc.bigasr.sauc.concurrent", "desc": "豆包流式语音识别（并发版）" }
+            ]
+        }
+    ]
+}

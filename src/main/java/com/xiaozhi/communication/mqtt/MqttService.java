@@ -49,6 +49,15 @@ public interface MqttService {
     boolean isConnected();
 
     /**
+     * 获取当前客户端 ID
+     *
+     * @return 客户端ID，未连接时返回空字符串
+     */
+    default String getClientId() {
+        return "";
+    }
+
+    /**
      * 构建设备命令 Topic
      * 格式: {topicPrefix}/{userId}/device/{deviceId}/command
      *
@@ -77,6 +86,36 @@ public interface MqttService {
      * @return 完整的 Topic 路径
      */
     String buildNotifyTopic(String userId, String deviceId);
+
+    /**
+     * 构建设备传感器数据 Topic
+     * 格式: {topicPrefix}/{userId}/device/{deviceId}/sensor
+     *
+     * @param userId   用户ID
+     * @param deviceId 设备ID
+     * @return 完整的 Topic 路径
+     */
+    String buildSensorTopic(String userId, String deviceId);
+
+    /**
+     * 构建分组命令 Topic
+     * 格式: {topicPrefix}/{userId}/group/{groupId}/command
+     *
+     * @param userId  用户ID
+     * @param groupId 分组ID
+     * @return 完整的 Topic 路径
+     */
+    String buildGroupCommandTopic(String userId, String groupId);
+
+    /**
+     * 构建分组通知 Topic
+     * 格式: {topicPrefix}/{userId}/group/{groupId}/notify
+     *
+     * @param userId  用户ID
+     * @param groupId 分组ID
+     * @return 完整的 Topic 路径
+     */
+    String buildGroupNotifyTopic(String userId, String groupId);
 
     /**
      * MQTT 消息监听器

@@ -1,0 +1,39 @@
+{
+    "factory_tts_infos": [
+        {
+            "name": "aliyun",
+            "models": [
+                { "model_name": "cosyvoice-v2", "desc": "CosyVoice V2" },
+                { "model_name": "cosyvoice-v3-flash", "desc": "CosyVoice V3 Flash" },
+                { "model_name": "cosyvoice-v3-plus", "desc": "CosyVoice V3 Plus" },
+                { "model_name": "sambert-v1", "desc": "Sambert V1" },
+                { "model_name": "qwen3-tts-flash-realtime", "desc": "Qwen3 TTS Flash 实时" },
+                { "model_name": "qwen3-tts-instruct-flash-realtime", "desc": "Qwen3 TTS Instruct Flash 实时" },
+                { "model_name": "qwen-tts-realtime", "desc": "Qwen TTS 实时" }
+            ]
+        },
+        {
+            "name": "volcengine",
+            "models": [
+                { "model_name": "volcano_tts", "desc": "火山引擎语音合成" },
+                { "model_name": "volcano_mega", "desc": "火山引擎大模型语音合成" }
+            ]
+        },
+        {
+            "name": "tencent",
+            "models": [
+                { "model_name": "default", "desc": "默认引擎" }
+            ]
+        },
+        {
+            "name": "minimax",
+            "models": [
+                { "model_name": "speech-02-hd", "desc": "Speech 02 HD" },
+                { "model_name": "speech-02-turbo", "desc": "Speech 02 Turbo" },
+                { "model_name": "speech-01-hd", "desc": "Speech 01 HD" },
+                { "model_name": "speech-01-turbo", "desc": "Speech 01 Turbo" },
+                { "model_name": "speech-01-240228", "desc": "Speech 01" }
+            ]
+        }
+    ]
+}

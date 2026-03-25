@@ -168,7 +168,13 @@ public class Persona {
 
         // 获取对话时间戳
         Instant now = Instant.now();
-        return chatStream(null,now, userMessage, useFunctionCall);
+        // 从 session 属性中读取用户音频路径（由 DialogueService 设置）
+        Path userSpeechPath = null;
+        Object pendingPath = session.getAttribute("pendingUserAudioPath");
+        if (pendingPath instanceof String pathStr) {
+            userSpeechPath = Path.of(pathStr);
+        }
+        return chatStream(userSpeechPath, now, userMessage, useFunctionCall);
     }
 
     /**
@@ -229,12 +235,19 @@ public class Persona {
         return new MessageAggregator().aggregate(chatFlux, chatResponse -> {
             boolean disturbed = isDisturbed(chatResponse);
             var toolCallDetails = session.drainToolCallDetails();
+            // 从 session 属性中读取音频分组标识（由 DialogueService 设置）
+            String audioGroup = null;
+            Object pendingGroup = session.getAttribute("pendingAudioGroup");
+            if (pendingGroup instanceof String groupStr) {
+                audioGroup = groupStr;
+            }
             Dialogue dialogue = Dialogue.builder()
                     .userMessage(userMessage)
                     .chatResponse(chatResponse)
                     .conversationId(conversation)
                     .userMessageCreatedAt(now)
                     .userSpeechPath(userSpeechPath)
+                    .audioGroup(audioGroup)
                     .assistantMessageCreatedAt(ttft.get())
                     .disturbed(disturbed)
                     .toolCallDetails(toolCallDetails)

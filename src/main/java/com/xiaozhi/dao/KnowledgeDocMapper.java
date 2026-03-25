@@ -46,4 +46,9 @@ public interface KnowledgeDocMapper {
      * 根据知识库ID列表查询已就绪的文档列表
      */
     List<SysKnowledgeDoc> selectByKnowledgeBaseIds(@Param("ids") List<Long> ids);
+
+    /**
+     * 将 processing 状态的遗留文档重置为 failed
+     */
+    int resetProcessingStatus(@Param("errorMsg") String errorMsg);
 }

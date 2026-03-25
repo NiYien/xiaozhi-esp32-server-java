@@ -1,16 +1,23 @@
 package com.xiaozhi.dialogue.rag;
 
 import com.xiaozhi.common.config.RagConfig;
+import jakarta.annotation.Resource;
+import com.xiaozhi.dialogue.llm.factory.EmbeddingModelFactory;
+import com.xiaozhi.entity.SysKnowledgeBase;
 import com.xiaozhi.entity.SysRole;
+import com.xiaozhi.service.SysKnowledgeBaseService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import redis.clients.jedis.JedisPooled;
 
 import java.util.Arrays;
 import java.util.List;
@@ -28,11 +35,20 @@ public class KnowledgeRetrievalService {
 
     private static final Logger logger = LoggerFactory.getLogger(KnowledgeRetrievalService.class);
 
-    @Autowired
+    @Autowired(required = false)
     private VectorStore vectorStore;
 
     @Autowired
     private RagConfig ragConfig;
+
+    @Autowired
+    private SysKnowledgeBaseService knowledgeBaseService;
+
+    @Autowired
+    private EmbeddingModelFactory embeddingModelFactory;
+
+    @Resource(name = "ragJedisPooled")
+    private JedisPooled ragJedisPooled;
 
     /**
      * 根据用户查询检索相关知识（指定角色的知识库）
@@ -82,7 +98,10 @@ public class KnowledgeRetrievalService {
                     .filterExpression(filterExpression.build())
                     .build();
 
-            List<Document> results = vectorStore.similaritySearch(searchRequest);
+            // 根据知识库关联的 embeddingConfigId 获取对应的 VectorStore
+            VectorStore targetVectorStore = getVectorStoreForKnowledgeBases(kbIds);
+
+            List<Document> results = targetVectorStore.similaritySearch(searchRequest);
 
             if (results == null || results.isEmpty()) {
                 logger.debug("未检索到相关知识: query={}, knowledgeBaseIds={}", query, knowledgeBaseIds);
@@ -96,6 +115,53 @@ public class KnowledgeRetrievalService {
             logger.warn("知识检索失败: knowledgeBaseIds={}, error={}", knowledgeBaseIds, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 根据知识库列表获取对应的 VectorStore
+     * 使用第一个有 embeddingConfigId 的知识库的模型，回退到全局默认
+     *
+     * @param kbIds 知识库ID列表
+     * @return VectorStore 实例
+     */
+    private VectorStore getVectorStoreForKnowledgeBases(List<String> kbIds) {
+        for (String kbIdStr : kbIds) {
+            try {
+                Long kbId = Long.parseLong(kbIdStr);
+                SysKnowledgeBase knowledgeBase = knowledgeBaseService.selectById(kbId);
+                if (knowledgeBase != null && knowledgeBase.getEmbeddingConfigId() != null) {
+                    EmbeddingModel embeddingModel = embeddingModelFactory.takeEmbeddingModel(knowledgeBase.getEmbeddingConfigId());
+                    if (embeddingModel != null) {
+                        logger.info("检索使用知识库关联的 Embedding 模型: knowledgeBaseId={}, embeddingConfigId={}",
+                                kbId, knowledgeBase.getEmbeddingConfigId());
+                        return RedisVectorStore.builder(ragJedisPooled, embeddingModel)
+                                .indexName(ragConfig.getIndexName())
+                                .prefix(ragConfig.getPrefix())
+                                .initializeSchema(true)
+                                .build();
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("获取知识库 Embedding 模型失败: kbId={}, error={}", kbIdStr, e.getMessage());
+            }
+        }
+        // 回退到全局默认
+        if (vectorStore != null) {
+            return vectorStore;
+        }
+        try {
+            EmbeddingModel defaultModel = embeddingModelFactory.defaultEmbeddingModel();
+            if (defaultModel != null && ragJedisPooled != null) {
+                return RedisVectorStore.builder(ragJedisPooled, defaultModel)
+                        .indexName(ragConfig.getIndexName())
+                        .prefix(ragConfig.getPrefix())
+                        .initializeSchema(true)
+                        .build();
+            }
+        } catch (Exception e) {
+            logger.error("创建默认 VectorStore 失败: {}", e.getMessage());
+        }
+        return null;
     }
 
     /**

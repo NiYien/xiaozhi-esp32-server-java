@@ -96,3 +96,35 @@ export interface LLMFactory {
   llm: LLMModel[]
 }
 
+/**
+ * STT 模型信息
+ */
+export interface SttModel {
+  model_name: string
+  desc: string
+}
+
+/**
+ * STT 工厂信息
+ */
+export interface SttFactory {
+  name: string
+  models: SttModel[]
+}
+
+/**
+ * TTS 模型信息
+ */
+export interface TtsModel {
+  model_name: string
+  desc: string
+}
+
+/**
+ * TTS 工厂信息
+ */
+export interface TtsFactory {
+  name: string
+  models: TtsModel[]
+}
+

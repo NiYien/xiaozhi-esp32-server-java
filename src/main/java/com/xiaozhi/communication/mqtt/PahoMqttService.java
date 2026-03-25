@@ -138,6 +138,11 @@ public class PahoMqttService implements MqttService, MqttCallback {
     }
 
     @Override
+    public String getClientId() {
+        return mqttClient != null ? mqttClient.getClientId() : "";
+    }
+
+    @Override
     public String buildCommandTopic(String userId, String deviceId) {
         return "%s/%s/device/%s/command".formatted(mqttProperties.getTopicPrefix(), userId, deviceId);
     }
@@ -150,6 +155,21 @@ public class PahoMqttService implements MqttService, MqttCallback {
     @Override
     public String buildNotifyTopic(String userId, String deviceId) {
         return "%s/%s/device/%s/notify".formatted(mqttProperties.getTopicPrefix(), userId, deviceId);
+    }
+
+    @Override
+    public String buildSensorTopic(String userId, String deviceId) {
+        return "%s/%s/device/%s/sensor".formatted(mqttProperties.getTopicPrefix(), userId, deviceId);
+    }
+
+    @Override
+    public String buildGroupCommandTopic(String userId, String groupId) {
+        return "%s/%s/group/%s/command".formatted(mqttProperties.getTopicPrefix(), userId, groupId);
+    }
+
+    @Override
+    public String buildGroupNotifyTopic(String userId, String groupId) {
+        return "%s/%s/group/%s/notify".formatted(mqttProperties.getTopicPrefix(), userId, groupId);
     }
 
     // ========== MqttCallback 实现 ==========

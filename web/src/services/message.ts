@@ -30,3 +30,10 @@ export function updateMessage(data: Partial<Message>) {
   return http.putJSON(`${api.message.update}/${data.messageId}`, data)
 }
 
+/**
+ * 查询用户音频消息列表
+ */
+export function queryUserAudios(params: { deviceId?: string }) {
+  return http.get(api.message.userAudios, params)
+}
+

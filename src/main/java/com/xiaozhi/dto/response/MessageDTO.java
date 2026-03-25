@@ -41,6 +41,12 @@ public class MessageDTO {
     @Schema(description = "工具调用详情JSON，包含name/arguments/result")
     private String toolCalls;
 
+    @Schema(description = "音频分组标识")
+    private String audioGroup;
+
+    @Schema(description = "音频时长（秒）")
+    private Double audioDuration;
+
     @Schema(description = "会话ID", example = "session_123456")
     private String sessionId;
 

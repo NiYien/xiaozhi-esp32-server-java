@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xiaozhi.dao.SensorDataMapper">
+
+    <resultMap id="BaseResultMap" type="com.xiaozhi.entity.SysSensorData">
+        <id property="id" column="id" />
+        <result property="deviceId" column="deviceId" />
+        <result property="temperature" column="temperature" />
+        <result property="battery" column="battery" />
+        <result property="freeHeap" column="freeHeap" />
+        <result property="wifiRssi" column="wifiRssi" />
+        <result property="uptime" column="uptime" />
+        <result property="createTime" column="createTime" />
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id, deviceId, temperature, battery, freeHeap, wifiRssi, uptime, createTime
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" parameterType="com.xiaozhi.entity.SysSensorData">
+        INSERT INTO sys_sensor_data (deviceId, temperature, battery, freeHeap, wifiRssi, uptime)
+        VALUES (#{deviceId}, #{temperature}, #{battery}, #{freeHeap}, #{wifiRssi}, #{uptime})
+    </insert>
+
+    <select id="selectLatestByDeviceId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM sys_sensor_data
+        WHERE deviceId = #{deviceId}
+        ORDER BY createTime DESC
+        LIMIT 1
+    </select>
+
+    <select id="selectByDeviceId" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List" />
+        FROM sys_sensor_data
+        WHERE deviceId = #{deviceId}
+            <if test="startTime != null">AND createTime &gt;= #{startTime}</if>
+            <if test="endTime != null">AND createTime &lt;= #{endTime}</if>
+        ORDER BY createTime DESC
+    </select>
+
+    <delete id="deleteExpiredData">
+        DELETE FROM sys_sensor_data WHERE createTime &lt; #{expireTime}
+    </delete>
+
+    <select id="selectLatestByDeviceIds" resultMap="BaseResultMap">
+        SELECT s1.*
+        FROM sys_sensor_data s1
+        INNER JOIN (
+            SELECT deviceId, MAX(createTime) AS maxTime
+            FROM sys_sensor_data
+            WHERE deviceId IN
+            <foreach collection="deviceIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+            GROUP BY deviceId
+        ) s2 ON s1.deviceId = s2.deviceId AND s1.createTime = s2.maxTime
+    </select>
+
+</mapper>

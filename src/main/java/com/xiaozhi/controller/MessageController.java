@@ -4,8 +4,10 @@ import com.github.pagehelper.PageInfo;
 import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.common.web.PageFilter;
 import com.xiaozhi.communication.common.SessionManager;
+import com.xiaozhi.dto.response.MessageDTO;
 import com.xiaozhi.entity.SysMessage;
 import com.xiaozhi.service.SysMessageService;
+import com.xiaozhi.utils.AudioUtils;
 import com.xiaozhi.utils.CmsUtils;
 import com.xiaozhi.utils.DtoConverter;
 
@@ -16,6 +18,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.file.Path;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -119,6 +122,40 @@ public class MessageController extends BaseController {
         } catch (Exception e) {
             logger.error("批量生成对话标题失败", e);
             return ResultMessage.error("批量生成失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 查询指定设备的用户音频消息列表
+     */
+    @GetMapping("/userAudios")
+    @ResponseBody
+    @Operation(summary = "查询用户音频列表", description = "返回指定设备的有音频的用户消息列表，含 audioGroup 和 audioDuration")
+    public ResultMessage userAudios(@RequestParam(required = false) String deviceId) {
+        try {
+            Integer userId = CmsUtils.getUserId();
+            List<SysMessage> messages = sysMessageService.queryUserAudios(userId, deviceId);
+
+            // 转为 DTO 并计算音频时长
+            List<MessageDTO> dtoList = messages.stream().map(msg -> {
+                MessageDTO dto = DtoConverter.toMessageDTO(msg);
+                if (msg.getAudioPath() != null && !msg.getAudioPath().isBlank()) {
+                    try {
+                        double duration = AudioUtils.getAudioDuration(Path.of(msg.getAudioPath()));
+                        dto.setAudioDuration(duration > 0 ? duration : null);
+                    } catch (Exception e) {
+                        // 音频文件不存在时忽略
+                    }
+                }
+                return dto;
+            }).toList();
+
+            ResultMessage result = ResultMessage.success();
+            result.put("data", dtoList);
+            return result;
+        } catch (Exception e) {
+            logger.error("查询用户音频列表失败", e);
+            return ResultMessage.error();
         }
     }
 

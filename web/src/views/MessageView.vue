@@ -264,6 +264,33 @@ function parseToolCalls(toolCallsStr: string | undefined | null): any[] {
   }
 }
 
+// ==================== audioGroup 视觉分组 ====================
+function hasGroup(idx: number): boolean {
+  const msg = messages.value[idx]
+  return !!(msg && msg.audioGroup && msg.sender === 'user')
+}
+
+function isSameGroup(idx1: number, idx2: number): boolean {
+  const m1 = messages.value[idx1]
+  const m2 = messages.value[idx2]
+  return !!(m1 && m2 && m1.audioGroup && m1.audioGroup === m2.audioGroup && m1.sender === 'user' && m2.sender === 'user')
+}
+
+function isGroupStart(idx: number): boolean {
+  if (!hasGroup(idx)) return false
+  return !isSameGroup(idx, idx - 1)
+}
+
+function isGroupMiddle(idx: number): boolean {
+  if (!hasGroup(idx)) return false
+  return isSameGroup(idx, idx - 1) && isSameGroup(idx, idx + 1)
+}
+
+function isGroupEnd(idx: number): boolean {
+  if (!hasGroup(idx)) return false
+  return isSameGroup(idx, idx - 1) && !isSameGroup(idx, idx + 1)
+}
+
 // 左侧列表滚动加载
 function onSessionListScroll(e: Event) {
   const target = e.target as HTMLDivElement
@@ -396,13 +423,16 @@ fetchSessions(false)
             <a-spin :spinning="messagesLoading">
               <div class="chat-messages">
                 <div
-                  v-for="msg in messages"
+                  v-for="(msg, idx) in messages"
                   :key="msg.messageId"
                   class="chat-message"
                   :class="{
                     'chat-message--user': msg.sender === 'user',
                     'chat-message--assistant': msg.sender === 'assistant',
                     'chat-message--function': msg.messageType === 'FUNCTION_CALL',
+                    'chat-message--group-start': isGroupStart(idx),
+                    'chat-message--group-middle': isGroupMiddle(idx),
+                    'chat-message--group-end': isGroupEnd(idx),
                   }"
                 >
                   <!-- 助手消息：头像在左 -->
@@ -791,6 +821,38 @@ fetchSessions(false)
       word-break: break-all;
     }
   }
+}
+
+// ==================== audioGroup 视觉分组 ====================
+.chat-message--group-start {
+  border-top: 1px dashed var(--ant-color-border);
+  border-left: 1px dashed var(--ant-color-border);
+  border-right: 1px dashed var(--ant-color-border);
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+  padding-top: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  margin-bottom: -8px;
+}
+
+.chat-message--group-middle {
+  border-left: 1px dashed var(--ant-color-border);
+  border-right: 1px dashed var(--ant-color-border);
+  padding-left: 8px;
+  padding-right: 8px;
+  margin-bottom: -8px;
+}
+
+.chat-message--group-end {
+  border-bottom: 1px dashed var(--ant-color-border);
+  border-left: 1px dashed var(--ant-color-border);
+  border-right: 1px dashed var(--ant-color-border);
+  border-bottom-left-radius: 8px;
+  border-bottom-right-radius: 8px;
+  padding-bottom: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 // 暗色模式下用户气泡颜色

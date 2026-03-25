@@ -7,6 +7,7 @@ export interface KnowledgeBase {
   description: string | null
   userId: number
   embeddingConfigId: number | null
+  embeddingModelName: string | null
   state: string
   createTime: string
   updateTime: string
@@ -54,14 +55,14 @@ export function queryKnowledgeBases(params: Partial<KnowledgeBaseQueryParams>) {
 /**
  * 创建知识库
  */
-export function createKnowledgeBase(data: { knowledgeBaseName: string; description?: string }) {
+export function createKnowledgeBase(data: { knowledgeBaseName: string; description?: string; embeddingConfigId?: number }) {
   return http.postJSON<KnowledgeBase>(api.knowledge.baseAdd, data)
 }
 
 /**
  * 更新知识库
  */
-export function updateKnowledgeBase(data: { knowledgeBaseId: number; knowledgeBaseName?: string; description?: string }) {
+export function updateKnowledgeBase(data: { knowledgeBaseId: number; knowledgeBaseName?: string; description?: string; embeddingConfigId?: number }) {
   return http.putJSON(api.knowledge.baseUpdate, data)
 }
 

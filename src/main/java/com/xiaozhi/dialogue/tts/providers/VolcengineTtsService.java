@@ -43,7 +43,9 @@ public class VolcengineTtsService implements TtsService {
     // API相关
     private String appId;
     private String accessToken; // 对应 apiKey
-    
+    // 从 configName 读取的集群/模型参数
+    private String cluster;
+
     // 语音参数
     private Float pitch;
     private Float speed;
@@ -57,6 +59,9 @@ public class VolcengineTtsService implements TtsService {
         this.outputPath = outputPath;
         this.appId = config.getAppId();
         this.accessToken = config.getApiKey();
+        // 从 configName 读取集群/模型参数，为空时默认 volcano_tts
+        String configName = config.getConfigName();
+        this.cluster = (configName != null && !configName.isEmpty()) ? configName : "volcano_tts";
     }
 
     @Override
@@ -149,7 +154,7 @@ public class VolcengineTtsService implements TtsService {
             JsonObject app = new JsonObject();
             app.addProperty("appid", appId);
             app.addProperty("token", accessToken);
-            app.addProperty("cluster", "volcano_tts");
+            app.addProperty("cluster", cluster);
             requestJson.add("app", app);
 
             // user部分

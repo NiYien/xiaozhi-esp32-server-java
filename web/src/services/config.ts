@@ -47,3 +47,10 @@ export function addPlatformConfig(data: Partial<PlatformConfig>) {
 export function updatePlatformConfig(data: Partial<PlatformConfig>) {
   return http.putJSON(`${api.config.update}/${data.configId}`, data)
 }
+
+/**
+ * 动态获取模型列表
+ */
+export function fetchModels(params: { configType: string; provider: string; apiKey: string }) {
+  return http.get(api.config.models, params)
+}

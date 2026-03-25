@@ -9,6 +9,7 @@ import com.xiaozhi.entity.SysFirmware;
 import com.xiaozhi.service.OtaService;
 import com.xiaozhi.service.SysDeviceService;
 import com.xiaozhi.service.SysFirmwareService;
+import com.xiaozhi.communication.mqtt.MqttConfigGenerator;
 import com.xiaozhi.utils.CmsUtils;
 import com.xiaozhi.utils.JsonUtil;
 
@@ -16,6 +17,7 @@ import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.ObjectUtils;
 
@@ -40,6 +42,12 @@ public class OtaServiceImpl implements OtaService {
 
     @Resource
     private CmsUtils cmsUtils;
+
+    /**
+     * MQTT 配置生成器，仅在 MQTT 启用时注入
+     */
+    @Autowired(required = false)
+    private MqttConfigGenerator mqttConfigGenerator;
 
     @Override
     public OtaRequestDto parseOtaRequest(String requestBody, String deviceIdHeader) {
@@ -170,6 +178,15 @@ public class OtaServiceImpl implements OtaService {
             SysDevice boundDevice = queryDevice.get(0);
             device.setDeviceName(boundDevice.getDeviceName());
             deviceService.update(device);
+
+            // 当 MQTT 启用时，生成 MQTT 配置下发给设备
+            if (mqttConfigGenerator != null) {
+                Map<String, Object> mqttConfig = mqttConfigGenerator.generateMqttConfig(
+                        String.valueOf(boundDevice.getUserId()), deviceId);
+                if (mqttConfig != null) {
+                    response.setMqtt(mqttConfig);
+                }
+            }
         }
 
         return response;

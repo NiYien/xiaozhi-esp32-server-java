@@ -8,14 +8,15 @@ import com.xiaozhi.dialogue.llm.intent.IntentDetector.UserIntent;
 import com.xiaozhi.dialogue.service.VadService.VadStatus;
 import com.xiaozhi.dialogue.voiceprint.VoiceprintRecognitionService;
 import com.xiaozhi.entity.SysDevice;
+import com.xiaozhi.entity.SysMessage;
 import com.xiaozhi.entity.SysRole;
 import com.xiaozhi.event.ChatAbortEvent;
 import com.xiaozhi.service.*;
 
 import com.xiaozhi.utils.AudioUtils;
+import com.xiaozhi.utils.UserAudioWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.Assert;
@@ -69,6 +70,9 @@ public class DialogueService{
 
     @Autowired
     private WakeupWordService deviceWakeupService;
+
+    @Resource
+    private com.xiaozhi.dao.MessageMapper messageMapper;
 
 
     @org.springframework.context.event.EventListener
@@ -249,9 +253,17 @@ public class DialogueService{
                     logger.debug("声纹识别失败（不影响主流程）: {}", e.getMessage());
                 }
 
-                // 生成用户音频保存路径
+                // 保存用户音频为 OGG Opus 文件
                 Instant userInstant = Instant.now();
-                Path userAudioPath = session.getAudioPath(MessageType.USER.getValue(), userInstant);
+                String userAudioPath = saveUserAudioAsOpus(session, userInstant);
+
+                // 将用户音频路径设置到 session，供 Persona 在保存消息时使用
+                if (userAudioPath != null) {
+                    session.setAttribute("pendingUserAudioPath", userAudioPath);
+                    // 计算 audioGroup
+                    String audioGroup = computeAudioGroup(session);
+                    session.setAttribute("pendingAudioGroup", audioGroup);
+                }
 
                 // 2. 意图检测：在LLM之前拦截明确意图（如"退出"），避免不必要的LLM调用
                 UserIntent intent = intentDetector.detectIntent(finalText);
@@ -262,8 +274,9 @@ public class DialogueService{
                     persona.chat(finalText);
                 }
 
-                // 无论是否走LLM，都保存用户音频
-                saveUserAudio(session, userAudioPath);
+                // 清除临时属性
+                session.setAttribute("pendingUserAudioPath", null);
+                session.setAttribute("pendingAudioGroup", null);
 
             } catch (Exception e) {
                 logger.error("流式识别错误: {}", e.getMessage(), e);
@@ -505,22 +518,71 @@ public class DialogueService{
     }
 
     /**
-     * 保存用户音频数据为WAV文件
+     * 保存用户音频数据为 OGG Opus 文件（16kHz）
+     * 从 VadService 获取缓存的原始 Opus 帧，写入文件并更新数据库
+     *
+     * @param session 聊天会话
+     * @param instant 用户消息时间戳
+     * @return 音频文件路径字符串，保存失败返回 null
      */
-    private void saveUserAudio(ChatSession session, Path path) {
-        List<byte[]> pcmFrames = vadService.getPcmData(session.getSessionId());
-        if (pcmFrames == null || pcmFrames.isEmpty()) {
-            return;
+    private String saveUserAudioAsOpus(ChatSession session, Instant instant) {
+        try {
+            List<byte[]> opusFrames = vadService.getOpusFrames(session.getSessionId());
+            if (opusFrames == null || opusFrames.isEmpty()) {
+                return null;
+            }
+
+            SysDevice device = session.getSysDevice();
+            if (device == null || device.getRoleId() == null) {
+                return null;
+            }
+
+            Path opusPath = UserAudioWriter.generatePath(
+                    device.getDeviceId(), device.getRoleId(), instant);
+
+            boolean saved = UserAudioWriter.writeOpusFile(opusFrames, opusPath);
+            if (!saved) {
+                return null;
+            }
+
+            logger.debug("用户音频已保存为 Opus: {}", opusPath);
+            return opusPath.toString();
+        } catch (Exception e) {
+            logger.error("保存用户音频失败（不影响对话流程）: {}", e.getMessage());
+            return null;
         }
-        int totalSize = pcmFrames.stream().mapToInt(frame -> frame.length).sum();
-        byte[] fullPcmData = new byte[totalSize];
-        int offset = 0;
-        for (byte[] frame : pcmFrames) {
-            System.arraycopy(frame, 0, fullPcmData, offset, frame.length);
-            offset += frame.length;
+    }
+
+    /**
+     * 计算 audioGroup：
+     * 查询同设备同会话最近一条 user 消息的时间戳，
+     * 间隔 < 2 秒则复用其 audioGroup，否则生成新 UUID
+     */
+    private String computeAudioGroup(ChatSession session) {
+        try {
+            SysDevice device = session.getSysDevice();
+            if (device == null) {
+                return UUID.randomUUID().toString();
+            }
+
+            Persona persona = session.getPersona();
+            String sessionIdStr = (persona != null && persona.getConversation() != null)
+                    ? persona.getConversation().sessionId()
+                    : session.getSessionId();
+
+            SysMessage lastUserMsg = messageMapper.findLastUserMessage(
+                    device.getDeviceId(), sessionIdStr);
+
+            if (lastUserMsg != null && lastUserMsg.getCreateTime() != null) {
+                long intervalMs = System.currentTimeMillis() - lastUserMsg.getCreateTime().getTime();
+                if (intervalMs < 2000 && lastUserMsg.getAudioGroup() != null) {
+                    return lastUserMsg.getAudioGroup();
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("计算 audioGroup 失败，使用新 UUID: {}", e.getMessage());
         }
-        AudioUtils.saveAsWav(path, fullPcmData);
-        logger.debug("用户音频已保存: {}", path);
+        return UUID.randomUUID().toString();
     }
 
 }

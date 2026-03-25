@@ -89,6 +89,7 @@ CREATE TABLE `xiaozhi`.`sys_message` (
   `audioPath` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '语音文件路径',
   `state` enum('1','0') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT '1' COMMENT '状态：1-有效，0-删除',
   `toolCalls` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '工具调用详情JSON，包含name/arguments/result',
+  `audio_group` varchar(36) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '音频分组标识，同组表示被VAD切断的连续语音',
   `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '消息发送时间',
   PRIMARY KEY (`messageId`),
   KEY `deviceId` (`deviceId`),
@@ -329,7 +330,11 @@ INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `pe
 (NULL, '角色配置', 'system:role', 'menu', '/role', 'page/Role', 'user-add', 5, '1', '1'),
 (NULL, '提示词模板管理', 'system:prompt-template', 'menu', '/prompt-template', 'page/PromptTemplate', 'snippets', 6, '0', '1'),
 (NULL, '配置管理', 'system:config', 'menu', '/config', 'common/PageView', 'setting', 7, '1', '1'),
-(NULL, '设置', 'system:setting', 'menu', '/setting', 'common/PageView', 'setting', 8, '1', '1');
+(NULL, '设置', 'system:setting', 'menu', '/setting', 'common/PageView', 'setting', 8, '1', '1'),
+(NULL, 'MQTT管理', 'system:mqtt', 'menu', '/mqtt', 'page/Mqtt', 'cloud-server', 9, '1', '1'),
+(NULL, '监控面板', 'system:monitor', 'menu', '/monitor', 'page/Monitor', 'monitor', 10, '1', '1'),
+(NULL, '知识库管理', 'system:knowledge', 'menu', '/knowledge', 'page/Knowledge', 'read', 11, '1', '1'),
+(NULL, '声纹管理', 'system:voiceprint', 'menu', '/voiceprint', 'page/Voiceprint', 'audio', 12, '1', '1');
 
 -- 配置管理子菜单
 INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `permissionType`, `path`, `component`, `icon`, `sort`, `visible`, `status`) VALUES
@@ -402,5 +407,94 @@ INSERT INTO `xiaozhi`.`sys_permission` (`parentId`, `name`, `permissionKey`, `pe
 -- 管理员角色赋予固件管理权限
 INSERT INTO `xiaozhi`.`sys_role_permission` (`roleId`, `permissionId`)
 SELECT 1, permissionId FROM `xiaozhi`.`sys_permission` WHERE `permissionKey` = 'system:config:firmware';
+
+-- ============================================================
+-- 知识库表：sys_knowledge_base
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `xiaozhi`.`sys_knowledge_base` (
+  `knowledgeBaseId` bigint NOT NULL AUTO_INCREMENT COMMENT '知识库ID，主键',
+  `knowledgeBaseName` varchar(200) NOT NULL COMMENT '知识库名称',
+  `description` varchar(500) DEFAULT NULL COMMENT '知识库描述',
+  `userId` int NOT NULL COMMENT '所属用户ID',
+  `embeddingConfigId` int DEFAULT NULL COMMENT '向量模型配置ID（关联 sys_config）',
+  `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-有效，0-删除',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updateTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`knowledgeBaseId`),
+  KEY `idx_userId` (`userId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库表';
+
+-- ============================================================
+-- 知识库文档表：sys_knowledge_doc
+-- ============================================================
+CREATE TABLE IF NOT EXISTS `xiaozhi`.`sys_knowledge_doc` (
+  `docId` bigint NOT NULL AUTO_INCREMENT COMMENT '文档ID，主键',
+  `knowledgeBaseId` bigint NOT NULL COMMENT '所属知识库ID',
+  `userId` int NOT NULL COMMENT '所属用户ID',
+  `docName` varchar(255) NOT NULL COMMENT '文档名称（原始文件名）',
+  `docType` varchar(20) NOT NULL COMMENT '文档类型：txt, pdf, md, docx',
+  `filePath` varchar(500) DEFAULT NULL COMMENT '原始文件存储路径',
+  `fileSize` bigint DEFAULT 0 COMMENT '文件大小（字节）',
+  `chunkCount` int DEFAULT 0 COMMENT '分块数量',
+  `charCount` int DEFAULT 0 COMMENT '总字符数',
+  `status` varchar(20) NOT NULL DEFAULT 'uploading' COMMENT '处理状态：uploading-上传中, processing-处理中, ready-就绪, failed-失败',
+  `errorMsg` varchar(500) DEFAULT NULL COMMENT '处理失败时的错误信息',
+  `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-有效，0-删除',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updateTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`docId`),
+  KEY `idx_knowledgeBaseId` (`knowledgeBaseId`),
+  KEY `idx_userId` (`userId`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='知识库文档表';
+
+-- ============================================================
+-- 传感器数据表：sys_sensor_data
+-- ============================================================
+DROP TABLE IF EXISTS `xiaozhi`.`sys_sensor_data`;
+CREATE TABLE `xiaozhi`.`sys_sensor_data` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `deviceId` varchar(255) NOT NULL COMMENT '设备ID',
+  `temperature` float DEFAULT NULL COMMENT '温度（摄氏度）',
+  `battery` int DEFAULT NULL COMMENT '电量百分比（0-100）',
+  `freeHeap` int DEFAULT NULL COMMENT '剩余堆内存（字节）',
+  `wifiRssi` int DEFAULT NULL COMMENT 'WiFi信号强度（dBm）',
+  `uptime` bigint DEFAULT NULL COMMENT '运行时长（秒）',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '上报时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_deviceId` (`deviceId`),
+  KEY `idx_createTime` (`createTime`),
+  KEY `idx_device_time` (`deviceId`, `createTime` DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设备传感器数据表';
+
+-- ============================================================
+-- 设备分组表：sys_device_group
+-- ============================================================
+DROP TABLE IF EXISTS `xiaozhi`.`sys_device_group_member`;
+DROP TABLE IF EXISTS `xiaozhi`.`sys_device_group`;
+CREATE TABLE `xiaozhi`.`sys_device_group` (
+  `groupId` int unsigned NOT NULL AUTO_INCREMENT COMMENT '分组ID',
+  `groupName` varchar(50) NOT NULL COMMENT '分组名称',
+  `description` varchar(200) DEFAULT NULL COMMENT '分组描述',
+  `userId` int NOT NULL COMMENT '所属用户ID',
+  `state` enum('1','0') DEFAULT '1' COMMENT '状态：1-启用，0-禁用',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updateTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`groupId`),
+  KEY `idx_userId` (`userId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设备分组表';
+
+-- ============================================================
+-- 设备分组成员表：sys_device_group_member
+-- ============================================================
+CREATE TABLE `xiaozhi`.`sys_device_group_member` (
+  `id` int unsigned NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `groupId` int unsigned NOT NULL COMMENT '分组ID',
+  `deviceId` varchar(255) NOT NULL COMMENT '设备ID',
+  `createTime` timestamp NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_device` (`groupId`, `deviceId`),
+  KEY `idx_deviceId` (`deviceId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='设备分组成员表';
 
 SET FOREIGN_KEY_CHECKS = 1;

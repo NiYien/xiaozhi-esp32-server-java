@@ -46,6 +46,8 @@ public class Dialogue {
     private boolean disturbed;
     private List<ChatSession.ToolCallInfo> toolCallDetails;
     private Path userSpeechPath;
+    // 用户音频分组标识
+    private String audioGroup;
 
     // 暂时不启用
     //private Path assistantSpeechPath;
@@ -58,7 +60,7 @@ public class Dialogue {
     //private Duration timeToFirstSpeech;
 
     @Builder
-    public Dialogue(UserMessage userMessage, ChatResponse chatResponse, ConversationIdentifier conversationId, Path userSpeechPath, Instant userMessageCreatedAt, Instant assistantMessageCreatedAt, boolean disturbed, List<ChatSession.ToolCallInfo> toolCallDetails) {
+    public Dialogue(UserMessage userMessage, ChatResponse chatResponse, ConversationIdentifier conversationId, Path userSpeechPath, String audioGroup, Instant userMessageCreatedAt, Instant assistantMessageCreatedAt, boolean disturbed, List<ChatSession.ToolCallInfo> toolCallDetails) {
         Assert.notNull(userMessage, "用户消息对象不应该为NULL！");
         Assert.notNull(chatResponse, "大语言模型的响应对象不应该为NULL！");
         Assert.notNull(conversationId, "会话ID对象不应该为NULL！");
@@ -69,6 +71,7 @@ public class Dialogue {
         this.chatResponse = chatResponse;
         this.conversationId = conversationId;
         this.userSpeechPath = userSpeechPath;
+        this.audioGroup = audioGroup;
         this.userMessageCreatedAt = userMessageCreatedAt;
         this.assistantMessageCreatedAt = assistantMessageCreatedAt;
         this.disturbed = disturbed;
@@ -116,6 +119,10 @@ public class Dialogue {
                 Instant instant = userMessageCreatedAt.truncatedTo(ChronoUnit.SECONDS);
                 if(userSpeechPath!=null) {
                     message.setAudioPath(userSpeechPath.toString());
+                }
+                // 设置音频分组标识
+                if (audioGroup != null) {
+                    message.setAudioGroup(audioGroup);
                 }
                 message.setCreateTime(Date.from(instant));
                 break;

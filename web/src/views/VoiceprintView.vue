@@ -11,13 +11,15 @@
 
     <a-card :title="t('voiceprint.title')" :bordered="false">
       <template #extra>
-        <a-button
-          type="primary"
-          :disabled="!statusEnabled"
-          @click="showRegisterModal"
-        >
-          {{ t('voiceprint.register') }}
-        </a-button>
+        <a-space>
+          <a-button
+            type="primary"
+            :disabled="!statusEnabled"
+            @click="showRegisterModal"
+          >
+            {{ t('voiceprint.register') }}
+          </a-button>
+        </a-space>
       </template>
 
       <!-- 声纹列表 -->
@@ -160,10 +162,32 @@
                 </div>
               </div>
             </a-tab-pane>
+            <a-tab-pane key="conversation" tab="从对话记录选择">
+              <a-button
+                type="primary"
+                :disabled="!registerForm.deviceId"
+                @click="openAudioSelectionFromRegister"
+              >
+                选择对话音频
+              </a-button>
+              <div v-if="selectedMessageIds.length > 0" style="margin-top: 8px; color: #52c41a;">
+                已选择 {{ selectedMessageIds.length }} 条音频
+              </div>
+              <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                从已选设备的对话记录中选择音频用于声纹注册
+              </div>
+            </a-tab-pane>
           </a-tabs>
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <AudioSelectionDialog
+      v-model:open="audioSelectionVisible"
+      :device-id="registerForm.deviceId || ''"
+      :min-duration="1.5"
+      @confirm="handleAudioSelectionConfirm"
+    />
   </div>
 </template>
 
@@ -181,6 +205,9 @@ import {
 } from '@/services/voiceprint'
 import { queryDevices } from '@/services/device'
 import { useAudioRecorder } from '@/composables/useAudioRecorder'
+import AudioSelectionDialog from '@/components/AudioSelectionDialog.vue'
+import { http } from '@/services/request'
+import api from '@/services/api'
 import type { SysVoiceprint } from '@/types/voiceprint'
 import type { Device } from '@/types/device'
 
@@ -270,6 +297,7 @@ function showRegisterModal() {
   registerForm.value = { name: '', deviceId: undefined }
   fileList.value = []
   audioTab.value = 'upload'
+  selectedMessageIds.value = []
   recorder.reset()
   registerModalVisible.value = true
   fetchDevices()
@@ -283,13 +311,18 @@ function handleModalCancel() {
 function handleTabChange(key: string | number) {
   if (key === 'upload') {
     recorder.reset()
-  } else {
+    selectedMessageIds.value = []
+  } else if (key === 'record') {
     fileList.value = []
+    selectedMessageIds.value = []
     nextTick(() => {
       if (waveformCanvas.value) {
         recorder.initCanvas(waveformCanvas.value)
       }
     })
+  } else if (key === 'conversation') {
+    fileList.value = []
+    recorder.reset()
   }
 }
 
@@ -328,6 +361,36 @@ async function handleRegister() {
   }
   if (!registerForm.value.deviceId) {
     message.warning(t('voiceprint.deviceRequired'))
+    return
+  }
+
+  // 从对话记录选择模式
+  if (audioTab.value === 'conversation') {
+    if (selectedMessageIds.value.length === 0) {
+      message.warning('请先选择对话音频')
+      return
+    }
+    registerLoading.value = true
+    try {
+      const res = await http.postJSON(api.voiceprint.registerFromMessages, {
+        deviceId: registerForm.value.deviceId,
+        name: registerForm.value.name,
+        messageIds: selectedMessageIds.value,
+      }) as any
+      if (res.code === 200) {
+        message.success(t('voiceprint.registerSuccess'))
+        registerModalVisible.value = false
+        selectedMessageIds.value = []
+        fetchVoiceprints()
+        fetchStatus()
+      } else {
+        message.error(res.message || t('voiceprint.registerFailed'))
+      }
+    } catch (e) {
+      message.error(t('voiceprint.registerFailed'))
+    } finally {
+      registerLoading.value = false
+    }
     return
   }
 
@@ -388,6 +451,25 @@ async function handleDelete(record: SysVoiceprint) {
   } catch (e) {
     message.error(t('common.deleteFailed'))
   }
+}
+
+// ==================== 从对话记录选择音频 ====================
+
+const audioSelectionVisible = ref(false)
+const selectedMessageIds = ref<number[]>([])
+
+// 从注册弹窗内打开音频选择对话框
+function openAudioSelectionFromRegister() {
+  if (!registerForm.value.deviceId) {
+    message.warning(t('voiceprint.deviceRequired'))
+    return
+  }
+  audioSelectionVisible.value = true
+}
+
+async function handleAudioSelectionConfirm(messageIds: number[]) {
+  selectedMessageIds.value = messageIds
+  audioSelectionVisible.value = false
 }
 
 onMounted(() => {

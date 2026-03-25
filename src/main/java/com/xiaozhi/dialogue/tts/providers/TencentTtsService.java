@@ -25,6 +25,8 @@ public class TencentTtsService implements TtsService {
     private String appId;
     private String secretId;
     private String secretKey;
+    // 从 configName 读取的引擎参数
+    private String engine;
 
     // 语音参数
     private Float pitch;
@@ -41,6 +43,9 @@ public class TencentTtsService implements TtsService {
         this.appId = config.getAppId();
         this.secretId = config.getApiKey();
         this.secretKey = config.getApiSecret();
+        // 从 configName 读取引擎参数，为空时使用默认引擎
+        String configName = config.getConfigName();
+        this.engine = (configName != null && !configName.isEmpty()) ? configName : "default";
     }
 
     @Override

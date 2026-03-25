@@ -3,8 +3,11 @@ package com.xiaozhi.controller;
 import com.xiaozhi.common.web.ResultMessage;
 import com.xiaozhi.dialogue.voiceprint.SpeakerEmbeddingService;
 import com.xiaozhi.dialogue.voiceprint.VoiceprintRecognitionService;
+import com.xiaozhi.entity.SysMessage;
 import com.xiaozhi.entity.SysVoiceprint;
+import com.xiaozhi.service.SysMessageService;
 import com.xiaozhi.service.SysVoiceprintService;
+import com.xiaozhi.utils.AudioUtils;
 import com.xiaozhi.utils.CmsUtils;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -36,6 +39,9 @@ public class VoiceprintController extends BaseController {
 
     @Resource
     private VoiceprintRecognitionService voiceprintRecognitionService;
+
+    @Resource
+    private SysMessageService sysMessageService;
 
     /**
      * 查询当前用户的声纹列表
@@ -177,6 +183,71 @@ public class VoiceprintController extends BaseController {
         data.put("voiceprintCount", voiceprintService.countByUserId(userId));
 
         return ResultMessage.success("查询成功", data);
+    }
+
+    /**
+     * 从对话记录中选择音频注册声纹
+     */
+    @PostMapping("/registerFromMessages")
+    @ResponseBody
+    @Operation(summary = "从对话记录注册声纹", description = "选择多条用户音频消息，拼接后注册声纹")
+    public ResultMessage registerFromMessages(@RequestBody Map<String, Object> params) {
+        try {
+            if (!speakerEmbeddingService.isEnabled()) {
+                return ResultMessage.error("声纹识别功能未启用，请检查模型文件是否存在");
+            }
+
+            String deviceId = (String) params.get("deviceId");
+            String name = (String) params.getOrDefault("name", "默认声纹");
+            @SuppressWarnings("unchecked")
+            List<Integer> messageIds = (List<Integer>) params.get("messageIds");
+
+            if (deviceId == null || messageIds == null || messageIds.isEmpty()) {
+                return ResultMessage.error("参数不完整");
+            }
+
+            Integer userId = CmsUtils.getUserId();
+
+            // 查询消息并提取音频路径
+            List<SysMessage> messages = sysMessageService.findByIds(messageIds);
+            List<String> audioPaths = messages.stream()
+                    .filter(m -> m.getAudioPath() != null && !m.getAudioPath().isBlank())
+                    .map(SysMessage::getAudioPath)
+                    .toList();
+
+            if (audioPaths.isEmpty()) {
+                return ResultMessage.error("所选消息中没有有效的音频文件");
+            }
+
+            // 拼接音频为 WAV
+            byte[] wavData = AudioUtils.mergeOpusToWav(audioPaths);
+
+            // 跳过 WAV 头获取 PCM
+            byte[] pcmData = AudioUtils.wavToPcm(wavData);
+
+            // 提取嵌入向量
+            float[] embedding = speakerEmbeddingService.extractEmbedding(pcmData);
+            if (embedding == null) {
+                return ResultMessage.error("声纹提取失败，请确保音频合计时长不低于1.5秒");
+            }
+
+            // 注册声纹
+            SysVoiceprint voiceprint = voiceprintService.register(userId, deviceId, name, embedding);
+            if (voiceprint == null) {
+                return ResultMessage.error("声纹注册失败，可能已达到数量上限");
+            }
+
+            // 刷新设备声纹缓存
+            voiceprintRecognitionService.refreshDeviceVoiceprints(deviceId);
+
+            Map<String, Object> data = new HashMap<>();
+            data.put("voiceprintId", voiceprint.getVoiceprintId());
+            data.put("deviceId", deviceId);
+            return ResultMessage.success("声纹注册成功", data);
+        } catch (Exception e) {
+            logger.error("从对话记录注册声纹失败: {}", e.getMessage(), e);
+            return ResultMessage.error("声纹注册失败: " + e.getMessage());
+        }
     }
 
     /**

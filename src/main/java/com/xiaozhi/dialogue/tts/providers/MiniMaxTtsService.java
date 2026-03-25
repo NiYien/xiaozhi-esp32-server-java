@@ -50,7 +50,9 @@ public class MiniMaxTtsService implements TtsService {
         this.pitch = pitch;
         this.speed = speed;
         this.outputPath = outputPath;
-        this.model = config.getConfigName();
+        // 从 configName 读取模型参数，为空时默认 speech-02-hd
+        String configName = config.getConfigName();
+        this.model = (configName != null && !configName.isEmpty()) ? configName : "speech-02-hd";
         // 设置音调（需要映射：我们的 [0.5, 2] → MiniMax的 [-12, 12]）
         // 映射公式：minimax_pitch = (our_pitch - 1.0) × 24
         minimaxPitch = (int)Math.round((pitch - 1.0f) * 24);

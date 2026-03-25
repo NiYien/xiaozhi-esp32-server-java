@@ -46,4 +46,9 @@ public interface SysKnowledgeDocService {
      * 根据知识库ID列表查询已就绪的文档列表
      */
     List<SysKnowledgeDoc> selectByKnowledgeBaseIds(List<Long> ids);
+
+    /**
+     * 将 processing 状态的遗留文档重置为 failed
+     */
+    int resetProcessingStatus(String errorMsg);
 }

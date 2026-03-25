@@ -63,4 +63,18 @@ public interface SysMessageService {
    * @return {total, success, failed}
    */
   Map<String, Integer> batchGenerateTitles(Integer userId);
+
+  /**
+   * 查询指定设备的用户音频消息列表
+   *
+   * @param userId   用户ID
+   * @param deviceId 设备ID（可选）
+   * @return 有音频的 user 消息列表
+   */
+  List<SysMessage> queryUserAudios(Integer userId, String deviceId);
+
+  /**
+   * 根据消息ID列表批量查询
+   */
+  List<SysMessage> findByIds(List<Integer> messageIds);
 }

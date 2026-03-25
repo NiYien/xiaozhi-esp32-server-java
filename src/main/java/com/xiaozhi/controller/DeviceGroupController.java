@@ -208,4 +208,30 @@ public class DeviceGroupController extends BaseController {
             return ResultMessage.error();
         }
     }
+
+    /**
+     * 批量添加设备到分组
+     */
+    @PostMapping("/{groupId}/members")
+    @ResponseBody
+    @Operation(summary = "批量添加设备到分组", description = "将多个设备添加到指定分组")
+    public ResultMessage addMembers(@PathVariable Integer groupId, @RequestBody List<String> deviceIds) {
+        try {
+            SysDeviceGroup group = deviceGroupService.selectById(groupId);
+            if (group == null || !group.getUserId().equals(CmsUtils.getUserId())) {
+                return ResultMessage.error("无权操作此分组");
+            }
+            int count = 0;
+            for (String deviceId : deviceIds) {
+                SysDeviceGroupMember member = new SysDeviceGroupMember();
+                member.setGroupId(groupId);
+                member.setDeviceId(deviceId);
+                count += deviceGroupService.addMember(member);
+            }
+            return ResultMessage.success("已添加 " + count + " 个设备");
+        } catch (Exception e) {
+            logger.error("批量添加设备到分组失败", e);
+            return ResultMessage.error();
+        }
+    }
 }

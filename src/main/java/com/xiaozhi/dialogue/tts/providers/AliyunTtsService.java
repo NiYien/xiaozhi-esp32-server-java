@@ -93,6 +93,8 @@ public class AliyunTtsService implements TtsService {
     private final String apiKey;
     private final String voiceName;
     private final String outputPath;
+    // 从 configName 读取的模型版本参数，用于指定默认 TTS 模型
+    private final String configModel;
 
     // 语音参数
     private final Float pitch;
@@ -105,6 +107,8 @@ public class AliyunTtsService implements TtsService {
         this.pitch = pitch;
         this.speed = speed;
         this.outputPath = outputPath;
+        // 从 configName 读取模型版本参数，可用于指定默认 CosyVoice/Qwen TTS 模型版本
+        this.configModel = config.getConfigName();
     }
 
     /**
@@ -118,8 +122,13 @@ public class AliyunTtsService implements TtsService {
      * @return [模型名, 音色名]
      */
     private String[] parseQwenVoiceParam(String voiceParam) {
+        // 默认模型：优先使用 configModel，其次使用 qwen3-tts-flash-realtime
+        String defaultModel = (configModel != null && !configModel.isEmpty()
+                && configModel.contains("qwen") && configModel.contains("tts"))
+                ? configModel : "qwen3-tts-flash-realtime";
+
         if (voiceParam == null || voiceParam.isEmpty()) {
-            return new String[]{"qwen3-tts-flash-realtime", voiceParam};
+            return new String[]{defaultModel, voiceParam};
         }
 
         // 检查是否包含模型前缀（冒号分隔格式）
@@ -133,12 +142,12 @@ public class AliyunTtsService implements TtsService {
                 return new String[]{model, voice};
             }
             // 如果模型名称无效，将整个字符串视为音色名
-            logger.warn("无效的千问模型名称: {}, 使用默认模型 qwen3-tts-flash-realtime", model);
-            return new String[]{"qwen3-tts-flash-realtime", voiceParam};
+            logger.warn("无效的千问模型名称: {}, 使用默认模型 {}", model, defaultModel);
+            return new String[]{defaultModel, voiceParam};
         }
 
         // 没有模型前缀，使用默认模型
-        return new String[]{"qwen3-tts-flash-realtime", voiceParam};
+        return new String[]{defaultModel, voiceParam};
     }
 
     /**
@@ -152,8 +161,13 @@ public class AliyunTtsService implements TtsService {
      * @return [模型名, 音色名]
      */
     private String[] parseCosyVoiceParam(String voiceParam) {
+        // 默认模型：优先使用 configModel，其次使用 cosyvoice-v2
+        String defaultModel = (configModel != null && !configModel.isEmpty()
+                && configModel.startsWith("cosyvoice"))
+                ? configModel : "cosyvoice-v2";
+
         if (voiceParam == null || voiceParam.isEmpty()) {
-            return new String[]{"cosyvoice-v2", voiceParam};
+            return new String[]{defaultModel, voiceParam};
         }
 
         if (voiceParam.startsWith("cosyvoice-v3-plus-")) {
@@ -175,12 +189,12 @@ public class AliyunTtsService implements TtsService {
                 return new String[]{model, voice};
             }
             // 如果模型名称无效，将整个字符串视为音色名
-            logger.warn("无效的 CosyVoice 模型名称: {}, 使用默认模型 cosyvoice-v2", model);
-            return new String[]{"cosyvoice-v2", voiceParam};
+            logger.warn("无效的 CosyVoice 模型名称: {}, 使用默认模型 {}", model, defaultModel);
+            return new String[]{defaultModel, voiceParam};
         }
 
         // 没有模型前缀，使用默认模型
-        return new String[]{"cosyvoice-v2", voiceParam};
+        return new String[]{defaultModel, voiceParam};
     }
 
     @Override
@@ -317,13 +331,14 @@ public class AliyunTtsService implements TtsService {
     private String ttsQwen(String text) {
         // 解析音色参数
         String[] parsed = parseQwenVoiceParam(voiceName);
+        String modelName = parsed[0];
         String actualVoiceName = parsed[1];
-        String modelDesc = voiceName + "模型";
+        String modelDesc = modelName + "模型(音色:" + actualVoiceName + ")";
 
         return executeWithRetry(modelDesc, () -> {
             AudioParameters.Voice voice = VOICE_MAP.get(actualVoiceName);
             MultiModalConversationParam param = MultiModalConversationParam.builder()
-                    .model("qwen3-tts-flash")
+                    .model(modelName)
                     .apiKey(apiKey)
                     .text(text)
                     .voice(voice)

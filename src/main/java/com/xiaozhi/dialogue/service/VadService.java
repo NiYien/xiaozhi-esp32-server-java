@@ -84,6 +84,8 @@ public class VadService {
         private final int maxPreBufferSize;
 
         private final List<byte[]> pcmData = new ArrayList<>();
+        // 缓存原始 Opus 帧，用于用户音频保存
+        private final List<byte[]> opusFrames = new ArrayList<>();
 
         public VadState() {
             this.maxPreBufferSize = preBufferMs * 32; // 16kHz, 16bit, mono = 32 bytes/ms
@@ -163,6 +165,12 @@ public class VadService {
 
         public List<byte[]> getPcmData() { return new ArrayList<>(pcmData); }
 
+        public void addOpusFrame(byte[] opusFrame) {
+            if (opusFrame != null && opusFrame.length > 0) opusFrames.add(opusFrame.clone());
+        }
+
+        public List<byte[]> getOpusFrames() { return new ArrayList<>(opusFrames); }
+
         public void reset() {
             speaking = false;
             silenceTime = 0;
@@ -175,6 +183,7 @@ public class VadService {
             preBuffer.clear();
             preBufferSize = 0;
             pcmData.clear();
+            opusFrames.clear();
         }
     }
 
@@ -277,12 +286,16 @@ public class VadService {
 
                 if (!state.isSpeaking() && isSpeech && speechStartAllowed) {
                     state.pcmData.clear();
+                    state.opusFrames.clear();
                     state.setSpeaking(true);
                     state.resetSilenceFrameCount();
 
                     logger.debug("检测到语音开始 - SessionId: {}, 概率: {}, 能量: {}, 阈值: {}",
                             sessionId, String.format("%.4f", speechProb),
                             String.format("%.6f", energy), String.format("%.4f", speechThreshold));
+
+                    // 缓存原始 Opus 帧用于用户音频保存
+                    state.addOpusFrame(opusData);
 
                     byte[] preBufferData = state.drainPreBuffer();
                     byte[] result = preBufferData.length > 0 ? preBufferData : pcmData;
@@ -305,6 +318,10 @@ public class VadService {
                                 for (int i = 0; i < framesToRemove && !state.pcmData.isEmpty(); i++) {
                                     state.pcmData.remove(state.pcmData.size() - 1);
                                 }
+                                // 同步移除 Opus 帧尾部静音，保持保存的音频与 STT 输入一致
+                                for (int i = 0; i < framesToRemove && !state.opusFrames.isEmpty(); i++) {
+                                    state.opusFrames.remove(state.opusFrames.size() - 1);
+                                }
                             }
                         }
                         logger.debug("语音结束: {}, 静音: {}ms", sessionId, silenceDuration);
@@ -314,11 +331,13 @@ public class VadService {
                         return new VadResult(VadStatus.SPEECH_END, pcmData);
                     } else {
                         state.addPcm(pcmData);
+                        state.addOpusFrame(opusData);
                         state.incrementSilenceFrameCount();
                         return new VadResult(VadStatus.SPEECH_CONTINUE, pcmData);
                     }
                 } else if (state.isSpeaking()) {
                     state.addPcm(pcmData);
+                    state.addOpusFrame(opusData);
                     state.resetSilenceFrameCount();
                     return new VadResult(VadStatus.SPEECH_CONTINUE, pcmData);
                 } else {
@@ -422,6 +441,17 @@ public class VadService {
         synchronized (lock) {
             VadState state = states.get(sessionId);
             return state != null ? state.getPcmData() : new ArrayList<>();
+        }
+    }
+
+    /**
+     * 获取本轮语音的原始 Opus 帧数据（用于用户音频保存）
+     */
+    public List<byte[]> getOpusFrames(String sessionId) {
+        Object lock = getLock(sessionId);
+        synchronized (lock) {
+            VadState state = states.get(sessionId);
+            return state != null ? state.getOpusFrames() : new ArrayList<>();
         }
     }
 

@@ -44,4 +44,19 @@ public class NoOpMqttService implements MqttService {
     public String buildNotifyTopic(String userId, String deviceId) {
         return "";
     }
+
+    @Override
+    public String buildSensorTopic(String userId, String deviceId) {
+        return "";
+    }
+
+    @Override
+    public String buildGroupCommandTopic(String userId, String groupId) {
+        return "";
+    }
+
+    @Override
+    public String buildGroupNotifyTopic(String userId, String groupId) {
+        return "";
+    }
 }

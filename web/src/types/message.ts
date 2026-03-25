@@ -10,6 +10,8 @@ export interface Message {
   sender: 'user' | 'assistant'
   message: string
   audioPath?: string
+  audioGroup?: string
+  audioDuration?: number
   state: string
   messageType: string
   sessionId?: string

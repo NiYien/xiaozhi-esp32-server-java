@@ -13,6 +13,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import com.xiaozhi.dialogue.llm.factory.EmbeddingModelFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +51,12 @@ public class KnowledgeController extends BaseController {
 
     @Value("${xiaozhi.rag.upload-dir:./uploads/knowledge}")
     private String uploadDir;
+
+    @Value("${xiaozhi.rag.max-file-size-mb:50}")
+    private int maxFileSizeMb;
+
+    @Autowired(required = false)
+    private EmbeddingModelFactory embeddingModelFactory;
 
     /**
      * 支持的文档类型
@@ -183,6 +190,11 @@ public class KnowledgeController extends BaseController {
                 return ResultMessage.error("RAG 知识库功能未启用，请在配置中设置 xiaozhi.rag.enabled=true");
             }
 
+            // 前置检查：知识库是否关联了 Embedding 模型或有全局默认
+            if (embeddingModelFactory == null) {
+                return ResultMessage.error("Embedding 模型工厂未初始化，请检查配置");
+            }
+
             // 验证知识库是否存在且属于当前用户
             SysKnowledgeBase base = knowledgeBaseService.selectById(knowledgeBaseId);
             if (base == null) {
@@ -194,6 +206,12 @@ public class KnowledgeController extends BaseController {
 
             if (file.isEmpty()) {
                 return ResultMessage.error("文件不能为空");
+            }
+
+            // 文件大小校验
+            long maxBytes = (long) maxFileSizeMb * 1024 * 1024;
+            if (file.getSize() > maxBytes) {
+                return ResultMessage.error("文件大小超过限制（最大 " + maxFileSizeMb + "MB）");
             }
 
             // 检查文件类型
@@ -320,7 +338,8 @@ public class KnowledgeController extends BaseController {
      * 保存上传的文件到本地
      */
     private String saveFile(MultipartFile file, String extension) throws IOException {
-        Path dirPath = Paths.get(uploadDir);
+        // 使用绝对路径，避免 MultipartFile.transferTo() 解析为 Tomcat 临时目录
+        Path dirPath = Paths.get(uploadDir).toAbsolutePath();
         if (!Files.exists(dirPath)) {
             Files.createDirectories(dirPath);
         }

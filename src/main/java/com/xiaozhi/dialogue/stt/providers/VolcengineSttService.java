@@ -60,8 +60,9 @@ public class VolcengineSttService extends AbstractStreamingSttService {
     public VolcengineSttService(SysConfig config) {
         this.appId = config.getAppId();
         this.accessToken = config.getApiKey();
-        // 固定使用豆包流式语音识别模型1.0小时版
-        this.resourceId = "volc.bigasr.sauc.duration";
+        // 从 configName 读取资源 ID，为空时默认使用豆包流式语音识别模型1.0小时版
+        String configName = config.getConfigName();
+        this.resourceId = (configName != null && !configName.isEmpty()) ? configName : "volc.bigasr.sauc.duration";
 
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)

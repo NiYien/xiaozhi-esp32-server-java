@@ -70,4 +70,14 @@ public class MqttProperties {
      * 默认消息服务质量等级 (0, 1, 2)
      */
     private int qos = 1;
+
+    /**
+     * 设备连接 MQTT Broker 的用户名（通过 OTA 下发给设备）
+     */
+    private String deviceUsername;
+
+    /**
+     * 设备连接 MQTT Broker 的密码（通过 OTA 下发给设备）
+     */
+    private String devicePassword;
 }

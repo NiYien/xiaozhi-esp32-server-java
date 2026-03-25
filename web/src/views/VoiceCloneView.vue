@@ -16,7 +16,12 @@ import {
 } from '@/services/voiceClone'
 import type { VoiceClone } from '@/services/voiceClone'
 import { queryConfigs } from '@/services/config'
+import { queryDevices } from '@/services/device'
 import { useAudioRecorder } from '@/composables/useAudioRecorder'
+import AudioSelectionDialog from '@/components/AudioSelectionDialog.vue'
+import { http } from '@/services/request'
+import api from '@/services/api'
+import type { Device } from '@/types/device'
 
 const { t } = useI18n()
 
@@ -34,6 +39,7 @@ const uploadForm = reactive({
   provider: 'volcengine',
   configId: undefined as number | undefined,
   file: null as File | null,
+  deviceId: undefined as string | undefined,
 })
 
 // TTS 配置列表（用于选择 provider 对应的配置）
@@ -135,10 +141,13 @@ function showUploadDialog() {
   uploadForm.provider = 'volcengine'
   uploadForm.configId = undefined
   uploadForm.file = null
+  uploadForm.deviceId = undefined
   uploadProgress.value = 0
   audioTab.value = 'upload'
+  selectedMessageIds.value = []
   recorder.reset()
   uploadVisible.value = true
+  fetchDeviceList()
 }
 
 // 处理文件选择
@@ -166,6 +175,37 @@ async function handleUpload() {
   }
   if (!uploadForm.configId) {
     message.warning(t('voiceClone.pleaseSelectConfig'))
+    return
+  }
+
+  // 从对话记录选择模式
+  if (audioTab.value === 'conversation') {
+    if (selectedMessageIds.value.length === 0) {
+      message.warning('请先选择对话音频')
+      return
+    }
+    uploading.value = true
+    try {
+      const res = await http.postJSON(api.voiceClone.submitFromMessages, {
+        cloneName: uploadForm.cloneName,
+        provider: uploadForm.provider,
+        configId: uploadForm.configId,
+        speakerId: uploadForm.speakerId || undefined,
+        messageIds: selectedMessageIds.value,
+      }) as any
+      if (res.code === 200) {
+        message.success(t('voiceClone.uploadSuccess'))
+        uploadVisible.value = false
+        selectedMessageIds.value = []
+        await fetchData()
+      } else {
+        message.error(res.message || t('voiceClone.uploadFailed'))
+      }
+    } catch (e) {
+      message.error(t('voiceClone.uploadFailed'))
+    } finally {
+      uploading.value = false
+    }
     return
   }
 
@@ -279,14 +319,52 @@ function formatDuration(seconds: number): string {
 function handleTabChange(key: string | number) {
   if (key === 'upload') {
     recorder.reset()
-  } else {
+    selectedMessageIds.value = []
+  } else if (key === 'record') {
     uploadForm.file = null
+    selectedMessageIds.value = []
     nextTick(() => {
       if (waveformCanvas.value) {
         recorder.initCanvas(waveformCanvas.value)
       }
     })
+  } else if (key === 'conversation') {
+    uploadForm.file = null
+    recorder.reset()
   }
+}
+
+// ==================== 从对话记录选择音频 ====================
+
+const audioSelectionVisible = ref(false)
+const deviceList = ref<Device[]>([])
+const deviceLoading = ref(false)
+const selectedMessageIds = ref<number[]>([])
+
+async function fetchDeviceList() {
+  deviceLoading.value = true
+  try {
+    const res = await queryDevices({ start: 1, limit: 1000 })
+    deviceList.value = (res as any).data?.list || []
+  } catch (e) {
+    console.error(e)
+  } finally {
+    deviceLoading.value = false
+  }
+}
+
+// 从上传弹窗内打开音频选择对话框
+function openAudioSelectionFromUpload() {
+  if (!uploadForm.deviceId) {
+    message.warning('请选择设备')
+    return
+  }
+  audioSelectionVisible.value = true
+}
+
+async function handleAudioSelectionConfirm(messageIds: number[]) {
+  selectedMessageIds.value = messageIds
+  audioSelectionVisible.value = false
 }
 
 onMounted(() => {
@@ -456,11 +534,46 @@ onUnmounted(() => {
                 </div>
               </div>
             </a-tab-pane>
+            <a-tab-pane key="conversation" tab="从对话记录选择">
+              <a-form-item label="设备" required style="margin-bottom: 8px;">
+                <a-select
+                  v-model:value="uploadForm.deviceId"
+                  placeholder="请选择设备"
+                  :loading="deviceLoading"
+                  show-search
+                  option-filter-prop="label"
+                >
+                  <a-select-option v-for="d in deviceList" :key="d.deviceId" :value="d.deviceId" :label="d.deviceName || d.deviceId">
+                    {{ d.deviceName || d.deviceId }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-button
+                type="primary"
+                :disabled="!uploadForm.deviceId"
+                @click="openAudioSelectionFromUpload"
+              >
+                选择对话音频
+              </a-button>
+              <div v-if="selectedMessageIds.length > 0" style="margin-top: 8px; color: #52c41a;">
+                已选择 {{ selectedMessageIds.length }} 条音频
+              </div>
+              <div style="color: #999; font-size: 12px; margin-top: 4px;">
+                从设备的对话记录中选择音频用于音色克隆
+              </div>
+            </a-tab-pane>
           </a-tabs>
         </a-form-item>
         <a-progress v-if="uploading" :percent="uploadProgress" size="small" />
       </a-form>
     </a-modal>
+
+    <AudioSelectionDialog
+      v-model:open="audioSelectionVisible"
+      :device-id="uploadForm.deviceId || ''"
+      :min-duration="10"
+      @confirm="handleAudioSelectionConfirm"
+    />
   </div>
 </template>
 

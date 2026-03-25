@@ -70,6 +70,12 @@ public class SysMessage extends Base<SysMessage> {
     @Schema(description = "工具调用详情JSON，包含name/arguments/result")
     private String toolCalls;
 
+    /**
+     * 音频分组标识，同组表示被VAD切断的连续语音
+     */
+    @Schema(description = "音频分组标识")
+    private String audioGroup;
+
     @Schema(description = "会话ID")
     private String sessionId;
 

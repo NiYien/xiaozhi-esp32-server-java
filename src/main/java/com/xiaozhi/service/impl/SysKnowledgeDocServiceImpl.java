@@ -66,4 +66,10 @@ public class SysKnowledgeDocServiceImpl extends BaseServiceImpl implements SysKn
         }
         return knowledgeDocMapper.selectByKnowledgeBaseIds(ids);
     }
+
+    @Override
+    @Transactional
+    public int resetProcessingStatus(String errorMsg) {
+        return knowledgeDocMapper.resetProcessingStatus(errorMsg);
+    }
 }

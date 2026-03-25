@@ -8,6 +8,7 @@
         <result property="description" column="description" />
         <result property="userId" column="userId" />
         <result property="embeddingConfigId" column="embeddingConfigId" />
+        <result property="embeddingModelName" column="embeddingModelName" />
         <result property="state" column="state" />
         <result property="createTime" column="createTime" />
         <result property="updateTime" column="updateTime" />
@@ -20,12 +21,15 @@
 
     <select id="query" resultMap="BaseResultMap">
         SELECT
-        <include refid="Base_Column_List" />
-        FROM sys_knowledge_base
-        WHERE state = '1'
-        <if test="userId != null">AND userId = #{userId}</if>
-        <if test="knowledgeBaseName != null and knowledgeBaseName != ''">AND knowledgeBaseName LIKE CONCAT('%', #{knowledgeBaseName}, '%')</if>
-        ORDER BY createTime DESC
+        kb.knowledgeBaseId, kb.knowledgeBaseName, kb.description, kb.userId, kb.embeddingConfigId,
+        kb.state, kb.createTime, kb.updateTime,
+        sc.configName AS embeddingModelName
+        FROM sys_knowledge_base kb
+        LEFT JOIN sys_config sc ON kb.embeddingConfigId = sc.configId
+        WHERE kb.state = '1'
+        <if test="userId != null">AND kb.userId = #{userId}</if>
+        <if test="knowledgeBaseName != null and knowledgeBaseName != ''">AND kb.knowledgeBaseName LIKE CONCAT('%', #{knowledgeBaseName}, '%')</if>
+        ORDER BY kb.createTime DESC
     </select>
 
     <select id="selectById" resultMap="BaseResultMap">

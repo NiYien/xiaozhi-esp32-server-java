@@ -61,6 +61,15 @@ public class DeviceStateManager {
     }
 
     /**
+     * 获取所有 MQTT 在线设备 ID 集合
+     *
+     * @return MQTT 在线设备 ID 的不可变副本
+     */
+    public Set<String> getAllMqttOnlineDevices() {
+        return Set.copyOf(mqttOnlineDevices);
+    }
+
+    /**
      * 查询设备是否通过 WebSocket 在线
      *
      * @param deviceId 设备ID

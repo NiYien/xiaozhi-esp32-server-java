@@ -407,4 +407,13 @@ public class SessionManager {
     public String getOnlineChannels(String deviceId) {
         return deviceStateManager.getOnlineChannels(deviceId);
     }
+
+    /**
+     * 获取所有 MQTT 在线设备 ID 集合
+     *
+     * @return MQTT 在线设备 ID 的不可变副本
+     */
+    public java.util.Set<String> getAllMqttOnlineDevices() {
+        return deviceStateManager.getAllMqttOnlineDevices();
+    }
 }

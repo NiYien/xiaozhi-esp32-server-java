@@ -13,6 +13,7 @@
         <result property="messageType" column="messageType" />
         <result property="audioPath" column="audioPath" />
         <result property="toolCalls" column="toolCalls" />
+        <result property="audioGroup" column="audio_group" />
         <result property="sessionId" column="sessionId" />
         <result property="sessionTitle" column="session_title" />
         <result property="deviceName" column="deviceName" />
@@ -31,7 +32,7 @@
     </resultMap>
 
     <sql id="Message_Column_List">
-        sys_message.messageId, sys_message.deviceId, sys_message.sessionId, sys_message.message, sys_message.sender, sys_message.roleId, sys_message.state, sys_message.createTime, sys_message.messageType, sys_message.audioPath, sys_message.toolCalls
+        sys_message.messageId, sys_message.deviceId, sys_message.sessionId, sys_message.message, sys_message.sender, sys_message.roleId, sys_message.state, sys_message.createTime, sys_message.messageType, sys_message.audioPath, sys_message.toolCalls, sys_message.audio_group
     </sql>
 
     <sql id="Device_Column_List">
@@ -106,10 +107,10 @@
 
     <!-- 批量保存消息 -->
     <insert id="saveAll" parameterType="java.util.List">
-        INSERT INTO sys_message ( deviceId, sessionId, sender, roleId, message, messageType, audioPath, createTime, toolCalls)
+        INSERT INTO sys_message ( deviceId, sessionId, sender, roleId, message, messageType, audioPath, createTime, toolCalls, audio_group)
         VALUES
         <foreach collection="messages" item="message" separator=",">
-            (#{message.deviceId}, #{message.sessionId}, #{message.sender}, #{message.roleId}, #{message.message}, #{message.messageType}, #{message.audioPath}, #{message.createTime,jdbcType=TIMESTAMP}, #{message.toolCalls})
+            (#{message.deviceId}, #{message.sessionId}, #{message.sender}, #{message.roleId}, #{message.message}, #{message.messageType}, #{message.audioPath}, #{message.createTime,jdbcType=TIMESTAMP}, #{message.toolCalls}, #{message.audioGroup})
         </foreach>
     </insert>
 
@@ -221,6 +222,70 @@
         WHERE sessionId = #{sessionId} AND state = 1 AND messageType = 'NORMAL'
         ORDER BY createTime ASC
         LIMIT #{limit}
+    </select>
+
+    <!-- 查询指定设备的用户音频消息列表 -->
+    <select id="queryUserAudios" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Message_Column_List"></include>
+        FROM sys_message
+        LEFT JOIN sys_device ON sys_message.deviceId = sys_device.deviceId
+        WHERE sys_message.sender = 'user'
+            AND sys_message.audioPath IS NOT NULL
+            AND sys_message.audioPath != ''
+            AND sys_message.state = 1
+            AND sys_device.userId = #{userId}
+            <if test="deviceId != null and deviceId != ''">
+                AND sys_message.deviceId = #{deviceId}
+            </if>
+        ORDER BY sys_message.createTime DESC
+    </select>
+
+    <!-- 查询同设备同会话最近一条 user 消息（用于 audioGroup 计算） -->
+    <select id="findLastUserMessage" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Message_Column_List"></include>
+        FROM sys_message
+        WHERE sys_message.deviceId = #{deviceId}
+            AND sys_message.sessionId = #{sessionId}
+            AND sys_message.sender = 'user'
+            AND sys_message.state = 1
+        ORDER BY sys_message.createTime DESC
+        LIMIT 1
+    </select>
+
+    <!-- 查询过期的用户音频消息（用于清理任务） -->
+    <select id="queryExpiredUserAudios" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Message_Column_List"></include>
+        FROM sys_message
+        WHERE sys_message.sender = 'user'
+            AND sys_message.audioPath IS NOT NULL
+            AND sys_message.audioPath != ''
+            AND sys_message.state = 1
+            AND sys_message.createTime &lt; #{expireTime}
+    </select>
+
+    <!-- 批量清空音频路径 -->
+    <update id="clearAudioPaths">
+        UPDATE sys_message SET audioPath = NULL, audio_group = NULL
+        WHERE messageId IN
+        <foreach collection="messageIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <!-- 根据消息ID列表批量查询 -->
+    <select id="findByIds" resultMap="BaseResultMap">
+        SELECT
+        <include refid="Message_Column_List"></include>
+        FROM sys_message
+        WHERE sys_message.state = 1
+            AND sys_message.messageId IN
+        <foreach collection="messageIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        ORDER BY sys_message.createTime ASC
     </select>
 
 </mapper>

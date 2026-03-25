@@ -46,11 +46,13 @@ export default {
     update: '/message',
     delete: '/message',
     export: '/message/export',
+    userAudios: '/message/userAudios',
   },
   config: {
     add: '/config',
     query: '/config',
     update: '/config',
+    models: '/config/models',
   },
   mcpTool: {
     toggleStatus: '/mcpTool/toggleStatus',
@@ -72,6 +74,7 @@ export default {
     list: '/voice-clone/list',
     delete: '/voice-clone',
     preview: '/voice-clone/preview',
+    submitFromMessages: '/voice-clone/submitFromMessages',
   },
   upload: '/file/upload',
   memory: {
@@ -98,6 +101,7 @@ export default {
   voiceprint: {
     list: '/voiceprint',
     register: '/voiceprint/register',
+    registerFromMessages: '/voiceprint/registerFromMessages',
     delete: '/voiceprint',
     status: '/voiceprint/status',
   },

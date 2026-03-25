@@ -75,6 +75,12 @@
         ORDER BY createTime DESC
     </select>
 
+    <update id="resetProcessingStatus">
+        UPDATE sys_knowledge_doc
+        SET status = 'failed', errorMsg = #{errorMsg}
+        WHERE state = '1' AND status = 'processing'
+    </update>
+
     <select id="selectByKnowledgeBaseIds" resultMap="BaseResultMap">
         SELECT
         <include refid="Base_Column_List" />

@@ -34,7 +34,15 @@ const {
   setAsDefault,
   updateModelOptions,
   getModelsByProviderAndType,
+  fetchDynamicModels,
 } = useConfigManager(props.configType)
+
+// 是否显示模型下拉框（STT/TTS 有模型列表时显示）
+const showModelSelect = computed(() => {
+  if (props.configType === 'llm') return false // LLM 有自己的模型选择逻辑
+  if (!currentType.value) return false
+  return modelOptions.value.length > 0
+})
 
 // 表单
 const formRef = ref<FormInstance>()
@@ -126,19 +134,34 @@ const columns = computed(() => {
  */
 function handleTypeChange(value: string) {
   currentType.value = value
-  
+
   // 清空模型名称
   formData.value.configName = undefined
-  
-  // 如果是 LLM，更新模型选项
+
+  // 更新模型选项
   if (props.configType === 'llm' && formData.value.modelType) {
     updateModelOptions(value, formData.value.modelType)
+  } else if (props.configType === 'stt' || props.configType === 'tts') {
+    updateModelOptions(value)
+    // 尝试动态获取模型列表（如果有 apiKey）
+    if (formData.value.apiKey) {
+      fetchDynamicModels(value, formData.value.apiKey, props.configType)
+    }
   }
-  
+
   // 填充默认 URL
   const typeField = currentTypeFields.value.find((f: ConfigField) => f.name === 'apiUrl')
   if (typeField?.placeholder) {
     formData.value.apiUrl = typeField.placeholder
+  }
+}
+
+/**
+ * 处理 apiKey 输入框失去焦点，尝试动态获取模型列表
+ */
+function handleApiKeyBlur() {
+  if ((props.configType === 'stt' || props.configType === 'tts') && currentType.value && formData.value.apiKey) {
+    fetchDynamicModels(currentType.value, formData.value.apiKey, props.configType)
   }
 }
 
@@ -178,9 +201,11 @@ function handleEdit(record: Config) {
     isDefault: props.configType != 'tts' ? record.isDefault === '1' : false
   }
 
-  // LLM 更新模型选项
+  // 更新模型选项
   if (props.configType === 'llm') {
     updateModelOptions(record.provider, record.modelType || 'chat')
+  } else if (props.configType === 'stt' || props.configType === 'tts') {
+    updateModelOptions(record.provider)
   }
 }
 
@@ -526,7 +551,19 @@ fetchData()
                         option.label.toLowerCase().includes(input.toLowerCase())
                     "
                   />
-                  <!-- LLM 模型列表为空或其他类型时使用输入框，支持手动输入 -->
+                  <!-- STT/TTS 有模型列表时使用带搜索的下拉框，支持自定义输入 -->
+                  <a-auto-complete
+                    v-else-if="showModelSelect"
+                    v-model:value="formData.configName"
+                    :options="modelOptions"
+                    :placeholder="t('config.enterName', { type: t(configTypeInfo.label) })"
+                    :filter-option="
+                      (input: string, option: any) =>
+                        (option.label || option.value || '').toLowerCase().includes(input.toLowerCase())
+                    "
+                    allow-clear
+                  />
+                  <!-- 模型列表为空时使用输入框 -->
                   <a-input
                     v-else
                     v-model:value="formData.configName"
@@ -600,6 +637,7 @@ fetchData()
                       v-model:value="formData[field.name]"
                       :placeholder="(editingConfigId && ['apiKey', 'apiSecret', 'ak', 'sk'].includes(field.name) && currentType !== 'sherpa-onnx') ? '不修改请留空' : (field.placeholder || t('config.enterField', { field: field.label }))"
                       :type="field.inputType || 'text'"
+                      @blur="field.name === 'apiKey' ? handleApiKeyBlur() : undefined"
                     >
                       <template v-if="field.suffix" #suffix>
                         <span style="color: var(--ant-color-text-tertiary)">{{ field.suffix }}</span>

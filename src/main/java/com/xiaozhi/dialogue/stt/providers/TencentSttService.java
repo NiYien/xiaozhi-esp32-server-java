@@ -56,6 +56,8 @@ public class TencentSttService implements SttService {
     private String secretId;
     private String secretKey;
     private String appId;
+    // 引擎模型类型，如 16k_zh、16k_en、16k_zh_large 等
+    private String engineModelType;
 
     private final static OkHttpClient client = HttpUtil.client;
 
@@ -84,6 +86,11 @@ public class TencentSttService implements SttService {
             this.secretId = config.getApiKey();
             this.secretKey = config.getApiSecret();
             this.appId = config.getAppId();
+            // 从 configName 读取引擎模型类型，为空时默认 16k_zh
+            String configName = config.getConfigName();
+            this.engineModelType = (configName != null && !configName.isEmpty()) ? configName : "16k_zh";
+        } else {
+            this.engineModelType = "16k_zh";
         }
     }
 
@@ -172,7 +179,7 @@ public class TencentSttService implements SttService {
 
             // 创建识别请求
             SpeechRecognizerRequest request = SpeechRecognizerRequest.init();
-            request.setEngineModelType("16k_zh"); // 16k采样率中文模型
+            request.setEngineModelType(engineModelType); // 从配置读取引擎模型类型
             request.setVoiceFormat(1); // PCM格式
             request.setVoiceId(voiceId);
 
@@ -364,7 +371,7 @@ public class TencentSttService implements SttService {
         ObjectNode requestMap = objectMapper.createObjectNode();
         requestMap.put("ProjectId", 0);
         requestMap.put("SubServiceType", 2); // 一句话识别
-        requestMap.put("EngSerViceType", "16k_zh"); // 中文普通话通用
+        requestMap.put("EngSerViceType", engineModelType); // 从配置读取引擎模型类型
         requestMap.put("SourceType", 1); // 音频数据来源为语音文件
         requestMap.put("VoiceFormat", FORMAT); // 音频格式
         requestMap.put("Data", base64Audio); // Base64编码的音频数据

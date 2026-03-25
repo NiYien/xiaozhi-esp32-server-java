@@ -22,6 +22,9 @@ public class OtaResponseDto {
     @Schema(description = "WebSocket连接信息（设备已绑定时）")
     private Map<String, Object> websocket;
 
+    @Schema(description = "MQTT连接信息（设备已绑定且MQTT启用时）")
+    private Map<String, Object> mqtt;
+
     @Schema(description = "服务器时间信息")
     private Map<String, Object> serverTime;
 

@@ -43,6 +43,12 @@ public class SysKnowledgeBase extends Base<SysKnowledgeBase> {
     private Integer embeddingConfigId;
 
     /**
+     * 向量模型名称（非数据库字段，查询时通过 JOIN 填充）
+     */
+    @Schema(description = "向量模型名称")
+    private String embeddingModelName;
+
+    /**
      * 状态：1-有效，0-删除
      */
     @Schema(description = "状态")

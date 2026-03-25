@@ -53,6 +53,9 @@ services:
       - SPRING_DATASOURCE_USERNAME=xiaozhi
       - SPRING_DATASOURCE_PASSWORD=123456
       - XIAOZHI_SERVER_IP=${SERVER_IP:-192.168.2.4}
+      - XIAOZHI_RAG_ENABLED=${RAG_ENABLED:-true}
+      - XIAOZHI_MQTT_ENABLED=${MQTT_ENABLED:-true}
+      - XIAOZHI_MQTT_BROKER_URL=${MQTT_BROKER_URL:-tcp://host.docker.internal:1883}
     volumes:
       - maven_repo:/root/.m2/repository  # 持久化Maven仓库
     restart: on-failure  # 添加重启策略，如果启动失败会自动重试

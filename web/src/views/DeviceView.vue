@@ -8,6 +8,8 @@ import { useLoadingStore } from '@/store/loading'
 import { useMemoryView } from '@/composables/useMemoryView'
 import { queryDevices, addDevice, updateDevice, deleteDevice, clearDeviceMemory } from '@/services/device'
 import { queryRoles } from '@/services/role'
+import { getMqttDevices } from '@/services/mqtt'
+import type { MqttDeviceStatus } from '@/types/mqtt'
 import DeviceEditDialog from '@/components/DeviceEditDialog.vue'
 import TableActionButtons from '@/components/TableActionButtons.vue'
 import type { Device, DeviceQueryParams, Role } from '@/types/device'
@@ -53,6 +55,9 @@ const stateOptions = [
 
 // 角色列表
 const roleItems = ref<Role[]>([])
+
+// MQTT 设备状态映射（deviceId -> MqttDeviceStatus）
+const mqttDeviceMap = ref<Map<string, MqttDeviceStatus>>(new Map())
 
 // 使用行内编辑 composable
 const {
@@ -134,6 +139,12 @@ const columns = computed(() => [
     align: 'center',
   },
   {
+    title: t('mqtt.channels'),
+    dataIndex: 'mqttChannels',
+    width: 120,
+    align: 'center',
+  },
+  {
     title: t('device.productType'),
     dataIndex: 'chipModelName',
     width: 100,
@@ -172,11 +183,27 @@ const columns = computed(() => [
   },
 ])
 
+// 加载 MQTT 设备状态映射
+async function loadMqttDeviceStatus() {
+  try {
+    const res = await getMqttDevices()
+    if (res.code === 200 && Array.isArray(res.data)) {
+      const map = new Map<string, MqttDeviceStatus>()
+      for (const item of res.data as MqttDeviceStatus[]) {
+        map.set(item.deviceId, item)
+      }
+      mqttDeviceMap.value = map
+    }
+  } catch {
+    // MQTT 可能未启用，静默处理
+  }
+}
+
 // 获取设备数据
 async function fetchData() {
   // 重置编辑状态
   editingKey.value = ''
-  
+
   await loadData((params) => {
     const queryParams: DeviceQueryParams = {
       start: params.start,
@@ -190,6 +217,9 @@ async function fetchData() {
 
     return queryDevices(queryParams)
   })
+
+  // 同时加载 MQTT 状态
+  await loadMqttDeviceStatus()
 }
 
 // 防抖搜索
@@ -540,11 +570,23 @@ onUnmounted(() => {
             </a-tooltip>
           </template>
 
-          <!-- 状态列 -->
+          <!-- 状态列（优先使用 MQTT 实时状态） -->
           <template v-else-if="column.dataIndex === 'state'">
-            <a-tag :color="record.state == 1 ? 'green' : record.state == 2 ? 'blue' : 'red'">
-              {{ record.state == 1 ? t('device.onlineStatus') : record.state == 2 ? t('device.standbyStatus') : t('device.offlineStatus') }}
-            </a-tag>
+            <template v-if="mqttDeviceMap.get(record.deviceId)">
+              <a-tag :color="mqttDeviceMap.get(record.deviceId)!.state === 'online' ? 'green' : mqttDeviceMap.get(record.deviceId)!.state === 'standby' ? 'orange' : 'default'">
+                {{ mqttDeviceMap.get(record.deviceId)!.state === 'online' ? t('mqtt.stateOnline') : mqttDeviceMap.get(record.deviceId)!.state === 'standby' ? t('mqtt.stateStandby') : t('mqtt.stateOffline') }}
+              </a-tag>
+            </template>
+            <template v-else>
+              <a-tag :color="record.state == 1 ? 'green' : record.state == 2 ? 'orange' : 'default'">
+                {{ record.state == 1 ? t('device.onlineStatus') : record.state == 2 ? t('device.standbyStatus') : t('device.offlineStatus') }}
+              </a-tag>
+            </template>
+          </template>
+
+          <!-- 在线通道列 -->
+          <template v-else-if="column.dataIndex === 'mqttChannels'">
+            {{ mqttDeviceMap.get(record.deviceId)?.channels || '-' }}
           </template>
 
           <!-- 时间列 -->

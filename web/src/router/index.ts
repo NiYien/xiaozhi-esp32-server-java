@@ -109,6 +109,17 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'mqtt',
+        name: 'mqtt',
+        component: () => import('../views/MqttView.vue'),
+        meta: {
+          title: 'router.title.mqtt',
+          icon: 'CloudServerOutlined',
+          requiresAuth: true,
+          permission: 'system:mqtt',
+        },
+      },
+      {
         path: 'knowledge',
         name: 'knowledge',
         component: () => import('../views/KnowledgeView.vue'),

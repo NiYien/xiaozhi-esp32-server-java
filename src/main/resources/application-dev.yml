@@ -26,3 +26,19 @@ email:
 dashscope:
   api:
     key: xxx
+
+# ============================================================
+# MQTT 配置（开发环境）
+# 需要先启动 MQTT Broker（如 Mosquitto）：
+#   docker run -d -p 1883:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf
+# ============================================================
+xiaozhi:
+  mqtt:
+    enabled: true
+    broker-url: tcp://localhost:1883
+    # device-username: device
+    # device-password: device123
+
+  # RAG 知识库（需要配置 Embedding 模型和 Redis）
+  rag:
+    enabled: true

@@ -705,6 +705,116 @@ public class AudioUtils {
     }
 
     /**
+     * 将多条用户音频消息的 OGG Opus 文件解码拼接为 WAV 字节数组
+     * 段间插入 200ms 静音避免突兀拼接
+     *
+     * @param opusPaths OGG Opus 文件路径列表
+     * @return 拼接后的 WAV 字节数组（16kHz 16bit 单声道）
+     * @throws IOException 文件读取异常
+     */
+    public static byte[] mergeOpusToWav(List<String> opusPaths) throws IOException {
+        if (opusPaths == null || opusPaths.isEmpty()) {
+            throw new IOException("音频路径列表为空");
+        }
+
+        // 200ms 静音数据（16kHz 16bit 单声道 = 16000 * 2 * 0.2 = 6400 字节）
+        int silenceBytes = STT_SAMPLE_RATE * 2 * 200 / 1000;
+        byte[] silence = new byte[silenceBytes];
+
+        List<byte[]> pcmChunks = new ArrayList<>();
+        int totalPcmSize = 0;
+
+        for (int i = 0; i < opusPaths.size(); i++) {
+            String path = opusPaths.get(i);
+            if (path == null || path.isBlank() || !Files.exists(Paths.get(path))) {
+                continue; // 跳过无效路径
+            }
+
+            try {
+                byte[] pcmData = opusToPcm(path);
+                if (pcmData != null && pcmData.length > 0) {
+                    pcmChunks.add(pcmData);
+                    totalPcmSize += pcmData.length;
+                    // 段间插入静音（非最后一段）
+                    if (i < opusPaths.size() - 1) {
+                        totalPcmSize += silenceBytes;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("解码 Opus 文件失败，跳过: {}", path, e);
+            }
+        }
+
+        if (pcmChunks.isEmpty()) {
+            throw new IOException("没有有效的音频数据");
+        }
+
+        // 拼接 PCM 数据
+        byte[] allPcm = new byte[totalPcmSize];
+        int offset = 0;
+        for (int i = 0; i < pcmChunks.size(); i++) {
+            byte[] chunk = pcmChunks.get(i);
+            System.arraycopy(chunk, 0, allPcm, offset, chunk.length);
+            offset += chunk.length;
+            // 段间插入静音
+            if (i < pcmChunks.size() - 1) {
+                System.arraycopy(silence, 0, allPcm, offset, silenceBytes);
+                offset += silenceBytes;
+            }
+        }
+
+        // 构建 WAV 文件
+        int bitsPerSample = 16;
+        ByteArrayOutputStream wavOut = new ByteArrayOutputStream(44 + allPcm.length);
+        DataOutputStream dos = new DataOutputStream(wavOut);
+
+        // RIFF 头
+        dos.writeBytes("RIFF");
+        dos.writeInt(Integer.reverseBytes(36 + allPcm.length));
+        dos.writeBytes("WAVE");
+
+        // fmt 子块
+        dos.writeBytes("fmt ");
+        dos.writeInt(Integer.reverseBytes(16));
+        dos.writeShort(Short.reverseBytes((short) 1));
+        dos.writeShort(Short.reverseBytes((short) CHANNELS));
+        dos.writeInt(Integer.reverseBytes(STT_SAMPLE_RATE));
+        dos.writeInt(Integer.reverseBytes(STT_SAMPLE_RATE * CHANNELS * bitsPerSample / 8));
+        dos.writeShort(Short.reverseBytes((short) (CHANNELS * bitsPerSample / 8)));
+        dos.writeShort(Short.reverseBytes((short) bitsPerSample));
+
+        // data 子块
+        dos.writeBytes("data");
+        dos.writeInt(Integer.reverseBytes(allPcm.length));
+        dos.write(allPcm);
+
+        return wavOut.toByteArray();
+    }
+
+    /**
+     * 获取 OGG Opus 文件的音频时长（秒）
+     * 通过读取帧数 * 帧时长计算，无需 ffprobe
+     *
+     * @param opusPath OGG Opus 文件路径
+     * @return 音频时长（秒），失败返回 -1
+     */
+    public static double getOpusDuration(String opusPath) {
+        if (opusPath == null || opusPath.isBlank()) {
+            return -1;
+        }
+        try {
+            List<byte[]> frames = readOpus(new File(opusPath));
+            if (frames.isEmpty()) {
+                return -1;
+            }
+            return frames.size() * OPUS_FRAME_DURATION_MS / 1000.0;
+        } catch (Exception e) {
+            logger.debug("计算 Opus 音频时长失败: {}", opusPath, e);
+            return -1;
+        }
+    }
+
+    /**
      * 读取标准Ogg Opus文件
      *
      * @param file Ogg Opus文件

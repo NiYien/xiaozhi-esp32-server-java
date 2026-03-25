@@ -61,4 +61,29 @@ public interface MessageMapper {
    * 查询指定 sessionId 的前 N 条消息（用于批量生成标题）
    */
   List<SysMessage> queryMessagesBySessionId(@Param("sessionId") String sessionId, @Param("limit") int limit);
+
+  /**
+   * 查询指定设备的用户音频消息列表
+   */
+  List<SysMessage> queryUserAudios(@Param("userId") Integer userId, @Param("deviceId") String deviceId);
+
+  /**
+   * 查询同设备同会话最近一条 user 消息（用于 audioGroup 计算）
+   */
+  SysMessage findLastUserMessage(@Param("deviceId") String deviceId, @Param("sessionId") String sessionId);
+
+  /**
+   * 查询过期的用户音频消息（用于清理任务）
+   */
+  List<SysMessage> queryExpiredUserAudios(@Param("expireTime") Date expireTime);
+
+  /**
+   * 批量清空音频路径
+   */
+  int clearAudioPaths(@Param("messageIds") List<Integer> messageIds);
+
+  /**
+   * 根据消息ID列表批量查询
+   */
+  List<SysMessage> findByIds(@Param("messageIds") List<Integer> messageIds);
 }

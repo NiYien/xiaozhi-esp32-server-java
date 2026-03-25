@@ -212,6 +212,19 @@ public class SysMessageServiceImpl extends BaseServiceImpl implements SysMessage
         return Map.of("total", sessionIds.size(), "success", success.get(), "failed", failed.get());
     }
 
+    @Override
+    public List<SysMessage> queryUserAudios(Integer userId, String deviceId) {
+        return messageMapper.queryUserAudios(userId, deviceId);
+    }
+
+    @Override
+    public List<SysMessage> findByIds(List<Integer> messageIds) {
+        if (messageIds == null || messageIds.isEmpty()) {
+            return List.of();
+        }
+        return messageMapper.findByIds(messageIds);
+    }
+
     private void generateTitleForSession(String sessionId, ChatModel chatModel) {
         List<SysMessage> messages = messageMapper.queryMessagesBySessionId(sessionId, MAX_MESSAGES_FOR_TITLE);
         if (messages.size() < 2) {

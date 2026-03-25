@@ -1,12 +1,7 @@
 package com.xiaozhi.common.config;
 
-import com.xiaozhi.dialogue.llm.factory.EmbeddingModelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.ai.vectorstore.redis.RedisVectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -17,6 +12,9 @@ import redis.clients.jedis.JedisPooled;
 /**
  * RAG 知识库配置类
  * 通过 xiaozhi.rag.enabled=true 启用
+ *
+ * VectorStore 和 EmbeddingModel 不再作为全局 Bean 创建，
+ * 由 DocumentProcessingService 和 KnowledgeRetrievalService 根据知识库的 embeddingConfigId 动态获取
  *
  * @author xiaozhi
  */
@@ -54,29 +52,23 @@ public class RagConfig {
     @Value("${xiaozhi.rag.max-context-chars:2000}")
     private int maxContextChars;
 
-    @Autowired
-    private EmbeddingModelFactory embeddingModelFactory;
+    @Value("${xiaozhi.rag.parse-timeout-seconds:60}")
+    private int parseTimeoutSeconds;
+
+    @Value("${xiaozhi.rag.max-file-size-mb:50}")
+    private int maxFileSizeMb;
+
+    @Value("${xiaozhi.rag.max-concurrent-processing:5}")
+    private int maxConcurrentProcessing;
 
     @Bean
-    public JedisPooled jedisPooled() {
-        logger.info("初始化 RAG Redis 连接: {}:{}", redisHost, redisPort);
-        return new JedisPooled(redisHost, redisPort);
-    }
-
-    @Bean
-    public EmbeddingModel ragEmbeddingModel() {
-        logger.info("初始化 RAG 向量模型（使用系统默认 embedding 配置）");
-        return embeddingModelFactory.defaultEmbeddingModel();
-    }
-
-    @Bean
-    public VectorStore vectorStore(JedisPooled jedisPooled, EmbeddingModel ragEmbeddingModel) {
-        logger.info("初始化 Redis VectorStore，索引名称: {}，前缀: {}", indexName, prefix);
-
-        return RedisVectorStore.builder(jedisPooled, ragEmbeddingModel)
-                .indexName(indexName)
-                .prefix(prefix)
-                .initializeSchema(true)
-                .build();
+    public JedisPooled ragJedisPooled() {
+        try {
+            logger.info("初始化 RAG Redis 连接: {}:{}", redisHost, redisPort);
+            return new JedisPooled(redisHost, redisPort);
+        } catch (Exception e) {
+            logger.warn("RAG Redis 连接失败，知识库功能不可用: {}", e.getMessage());
+            return null;
+        }
     }
 }

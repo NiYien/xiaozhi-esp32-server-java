@@ -88,10 +88,36 @@ public class EmbeddingModelFactory {
         MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
         headers.add("Content-Type", "application/json");
 
+        // 拆分 URL：Spring AI OpenAiApi 内部用 URI.resolve("/v1/embeddings") 拼接路径，
+        // 绝对路径会覆盖 baseUrl 中的子路径（如 /compatible-mode/v1/）。
+        // 解决方案：将 URL 拆分为 scheme+host+port 作为 baseUrl，
+        // 完整路径 + "/embeddings" 作为自定义 embeddingsPath。
+        String originalUrl = config.getApiUrl();
+        String baseUrl;
+        String embeddingsPath;
+        try {
+            java.net.URI uri = java.net.URI.create(originalUrl);
+            baseUrl = uri.getScheme() + "://" + uri.getAuthority() + "/";
+            String path = uri.getPath();
+            // 确保路径末尾有 /
+            if (!path.endsWith("/")) {
+                path = path + "/";
+            }
+            embeddingsPath = path + "embeddings";
+        } catch (Exception e) {
+            // URL 解析失败时回退到原始行为
+            baseUrl = originalUrl;
+            if (!baseUrl.endsWith("/")) {
+                baseUrl = baseUrl + "/";
+            }
+            embeddingsPath = "/v1/embeddings";
+        }
+
         // LM Studio不支持Http/2，所以需要强制使用HTTP/1.1
         var openAiApi = OpenAiApi.builder()
                 .apiKey(StringUtils.hasText(config.getApiKey()) ? new SimpleApiKey(config.getApiKey()) : new NoopApiKey())
-                .baseUrl(config.getApiUrl())
+                .baseUrl(baseUrl)
+                .embeddingsPath(embeddingsPath)
                 .headers(headers)
                 .webClientBuilder(WebClient.builder()
                         // Force HTTP/1.1 for streaming
@@ -109,7 +135,7 @@ public class EmbeddingModelFactory {
         var openAiEmbeddingOptions = OpenAiEmbeddingOptions.builder().model(config.getConfigName()).build();
 
         var embeddingModel = new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED,openAiEmbeddingOptions);
-        logger.info("Using OpenAi EmbeddingModel baseUrl: {}, name:{}",config.getApiUrl(), config.getConfigName());
+        logger.info("Using OpenAi EmbeddingModel baseUrl: {}, embeddingsPath: {}, name:{}", baseUrl, embeddingsPath, config.getConfigName());
         return embeddingModel;
     }
     private EmbeddingModel newZhipuEmbeddingModel(SysConfig config) {
