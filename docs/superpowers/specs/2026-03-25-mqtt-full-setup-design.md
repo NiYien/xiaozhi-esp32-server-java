@@ -1,0 +1,347 @@
+# MQTT 完整方案设计：设备管理 + 音频对话（MQTT+UDP）
+
+**日期**: 2026-03-25
+**状态**: 已批准
+
+## 1. 背景与目标
+
+小智 ESP32 Server Java 当前通过 WebSocket 实现设备音频对话。ESP32 固件已实现 MQTT+UDP 混合协议（MQTT 传控制消息，UDP 传加密音频），但服务端缺少对应的音频对话层实现。服务端已有完整的 MQTT 设备管理层代码（唤醒、通知、OTA、传感器、分组），但未启用。
+
+**目标**：
+1. 启用 MQTT 设备管理层，搭建 EMQX Broker
+2. 新增 MQTT+UDP 音频对话通道，与 WebSocket 并行共存
+3. 开发阶段 Docker 部署，最终目标生产环境高并发
+
+## 2. 关键设计决策
+
+| 决策 | 选择 | 理由 |
+|------|------|------|
+| MQTT Broker | EMQX 开源版 | 高并发（百万级连接）、原生集群、Dashboard 监控、生产就绪 |
+| UDP 音频服务部署 | 内嵌 Spring Boot JVM | 低延迟共享内存、与 WebSocket 架构一致、部署简单 |
+| 通道策略 | WebSocket + MQTT+UDP 并行共存 | 渐进迁移，不影响现有设备 |
+| 设备认证 | 先统一凭据，后续切一机一密 | 快速跑通，生产前加强 |
+| 音频加密 | AES-128-CTR | 与 ESP32 固件协议一致 |
+
+## 3. 整体架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Spring Boot 服务                       │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐  │
+│  │ WebSocket     │  │ MQTT 对话    │  │ MQTT 设备管理  │  │
+│  │ Handler       │  │ 处理器       │  │ (现有代码)     │  │
+│  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘  │
+│         │                 │                   │          │
+│         ▼                 ▼                   │          │
+│  ┌─────────────────────────────┐              │          │
+│  │     AudioChannel 接口       │              │          │
+│  │  ┌───────────┐ ┌──────────┐│              │          │
+│  │  │WebSocket  │ │MQTT+UDP  ││              │          │
+│  │  │Channel    │ │Channel   ││              │          │
+│  │  └───────────┘ └──────────┘│              │          │
+│  └──────────────┬──────────────┘              │          │
+│                 ▼                              │          │
+│  ┌─────────────────────────────┐              │          │
+│  │     DialogueService         │              │          │
+│  │  (STT → LLM → TTS 管线)    │              │          │
+│  └─────────────────────────────┘              │          │
+│                                               │          │
+│  ┌──────────────┐                             │          │
+│  │ UDP 音频服务  │ (Java NIO, 内嵌)            │          │
+│  └──────────────┘                             │          │
+└───────────┼──────────────┼────────────────────┼──────────┘
+            │              │                    │
+       UDP 音频包      MQTT 控制消息        MQTT 管理消息
+       (AES-CTR加密)                            │
+            │              │                    │
+            ▼              ▼                    ▼
+┌─────────────────────────────────────────────────────────┐
+│                     EMQX Broker                          │
+│              (Docker, 端口 1883/8883/18083)               │
+└─────────────────────────────────────────────────────────┘
+            │              │                    │
+            ▼              ▼                    ▼
+┌─────────────────────────────────────────────────────────┐
+│                    ESP32 设备                             │
+│         mqtt_protocol.cc (MQTT控制 + UDP音频)             │
+└─────────────────────────────────────────────────────────┘
+```
+
+## 4. 第一部分：基础设施 + 设备管理层
+
+### 4.1 EMQX Docker 部署
+
+在 `docker-compose.yml` 中新增 EMQX 服务：
+
+```yaml
+emqx:
+  image: emqx/emqx:5.8
+  ports:
+    - "1883:1883"      # MQTT
+    - "8883:8883"      # MQTTS
+    - "18083:18083"    # Dashboard
+  environment:
+    - EMQX_NAME=xiaozhi-emqx
+    - EMQX_LISTENERS__TCP__DEFAULT__MAX_CONNECTIONS=100000
+  volumes:
+    - emqx-data:/opt/emqx/data
+    - emqx-log:/opt/emqx/log
+  restart: unless-stopped
+```
+
+### 4.2 服务端配置
+
+`application.yml` 中 MQTT 已有完整配置，核心变更：
+- `xiaozhi.mqtt.enabled: true`
+- `xiaozhi.mqtt.broker-url: tcp://emqx:1883`（Docker 内部网络）
+- 配置 `device-username` / `device-password` 用于设备认证
+
+### 4.3 数据库迁移
+
+执行 `db/migration_mqtt_extended.sql`，创建：
+- `sys_sensor_data` — 传感器数据表
+- `sys_device_group` — 设备分组表
+- `sys_device_group_member` — 分组成员表
+
+### 4.4 验证清单
+
+- EMQX Dashboard 可访问（`http://localhost:18083`）
+- 服务端 `PahoMqttService` 成功连接 Broker
+- `/api/mqtt/status` 返回 connected
+- Python 模拟器可上报设备状态和传感器数据
+- 通过 `/api/mqtt/wakeup/{deviceId}` 可下发唤醒命令
+- 前端 MQTT 管理页面数据正常显示
+
+## 5. 第二部分：音频对话层（MQTT+UDP 通道）
+
+### 5.1 AudioChannel 通道抽象
+
+从现有 `ChatSession` 中抽取通用音频通道接口：
+
+```java
+/**
+ * 音频通信通道抽象，WebSocket 和 MQTT+UDP 各自实现
+ */
+public interface AudioChannel {
+    /** 发送音频数据（Opus 编码后的字节） */
+    void sendAudio(byte[] opusData);
+
+    /** 发送 JSON 控制消息 */
+    void sendMessage(String jsonMessage);
+
+    /** 关闭通道 */
+    void close();
+
+    /** 通道是否活跃 */
+    boolean isActive();
+
+    /** 获取通道类型标识 */
+    String getChannelType(); // "websocket" 或 "mqtt_udp"
+}
+```
+
+**实现类**：
+- `WebSocketAudioChannel` — 封装现有 WebSocket session 的音频收发逻辑
+- `MqttUdpAudioChannel` — 封装 MQTT 控制消息 + UDP 音频数据的收发
+
+**改造 ChatSession**：
+- `ChatSession` 持有 `AudioChannel` 引用而非直接持有 WebSocket session
+- `SessionManager` 根据通道类型创建对应的 `ChatSession`
+
+### 5.2 UDP 音频服务
+
+新包 `com.xiaozhi.communication.udp`：
+
+**UdpAudioServer**：
+- 基于 Java NIO `DatagramChannel`，非阻塞模式
+- 在 Spring Boot 启动时绑定配置的 UDP 端口
+- 接收数据包 → 解析 16 字节头 → 通过 SSRC 路由到对应 session → AES-CTR 解密 → 回调音频数据
+- 发送数据包 → AES-CTR 加密 → 组装 16 字节头 → 发送到设备地址
+
+**UdpAudioPacket**：
+- 数据包结构定义，与 ESP32 固件 `mqtt_protocol.cc` 中的格式完全对齐
+
+```
+偏移  字段          大小     说明
+0     type          1B      0x01 = 音频数据
+1     flags         1B      保留
+2     payload_len   2B      网络字节序，Opus 数据长度
+4     ssrc          4B      同步源ID，标识 session
+8     timestamp     4B      网络字节序，毫秒时间戳
+12    sequence      4B      网络字节序，单调递增
+16    payload       变长     AES-CTR 加密的 Opus 数据
+```
+
+**UdpSessionContext**：
+- 存储每个 UDP session 的状态：设备地址、AES 密钥/nonce、本地/远程序列号、SSRC
+
+### 5.3 AES-CTR 加解密
+
+新工具类 `AesCtrCodec`：
+- 使用 JDK 内置 `javax.crypto.Cipher`（AES/CTR/NoPadding）
+- 加密和解密 UDP 音频 payload
+- 密钥和 nonce 在 hello 握手时随机生成，通过 MQTT 下发给设备
+
+### 5.4 MQTT 对话处理器
+
+新类 `MqttDialogueHandler`：
+
+**职责**：监听设备通过 MQTT 发来的对话控制消息，管理对话生命周期。
+
+**订阅 Topic**：`xiaozhi/+/device/+/command`（设备发送的消息）
+
+**消息处理流程**：
+
+1. **hello 消息**：
+   - 分配 session_id 和 SSRC
+   - 随机生成 AES-128 密钥和 nonce
+   - 创建 `UdpSessionContext` 和 `MqttUdpAudioChannel`
+   - 创建 `ChatSession` 并注册到 `SessionManager`
+   - 通过 MQTT 回复 hello 响应（含 UDP server/port/key/nonce）
+
+2. **listen 消息**：
+   - 查找对应 session
+   - 触发 `DialogueService` 开始处理语音输入
+
+3. **abort 消息**：
+   - 中断当前对话流程
+
+4. **goodbye 消息**：
+   - 清理 session、关闭 UDP 通道
+
+**hello 响应格式**（与 ESP32 固件 `ParseServerHello()` 对齐）：
+```json
+{
+  "type": "hello",
+  "transport": "udp",
+  "session_id": "uuid",
+  "audio_params": {
+    "format": "opus",
+    "sample_rate": 24000,
+    "channels": 1,
+    "frame_duration": 60
+  },
+  "udp": {
+    "server": "<服务端IP>",
+    "port": 8888,
+    "key": "<32字符hex>",
+    "nonce": "<32字符hex>"
+  }
+}
+```
+
+### 5.5 Session 管理扩展
+
+**SessionManager 变更**：
+- 支持两种 session 来源：WebSocket 连接事件 / MQTT hello 消息
+- `ChatSession` 统一通过 `AudioChannel` 接口操作，无需区分通道类型
+- 设备同时只能有一个活跃 session（新连接踢掉旧 session）
+
+**设备状态三态整合**：
+- WebSocket 连接 → online（现有逻辑不变）
+- MQTT hello → online
+- MQTT 心跳 → 更新最后活跃时间
+- 断开 → offline
+
+### 5.6 OTA 配置下发
+
+现有 `MqttConfigGenerator` 已实现，OTA 响应中包含：
+```json
+{
+  "mqtt": {
+    "endpoint": "emqx-host:1883",
+    "client_id": "device_{deviceId}",
+    "username": "xiaozhi-device",
+    "password": "shared-password",
+    "keepalive": 240,
+    "publish_topic": "xiaozhi/{userId}/device/{deviceId}/command",
+    "subscribe_topic": "xiaozhi/{userId}/device/{deviceId}/command"
+  }
+}
+```
+
+ESP32 收到后存入 NVS，下次启动自动选择 MQTT 协议。
+
+### 5.7 配置项
+
+`application.yml` 新增：
+```yaml
+xiaozhi:
+  udp:
+    enabled: true
+    port: 8888              # UDP 音频端口
+    buffer-size: 4096       # 接收缓冲区大小
+```
+
+`docker-compose.yml` 暴露 UDP 端口：
+```yaml
+server:
+  ports:
+    - "8091:8091"      # HTTP
+    - "8888:8888/udp"  # UDP 音频
+```
+
+## 6. 数据流详细对比
+
+### WebSocket 方案（现有）
+```
+设备 → WebSocket 二进制帧(Opus) → ChatSession → Opus解码 → VAD → STT
+                                                                  ↓
+设备 ← WebSocket 二进制帧(Opus) ← ChatSession ← Opus编码 ← TTS ← LLM
+```
+
+### MQTT+UDP 方案（新增）
+```
+设备 → UDP(加密Opus) → UdpAudioServer → AES解密 → MqttUdpAudioChannel → ChatSession → Opus解码 → VAD → STT
+                                                                                                          ↓
+设备 ← UDP(加密Opus) ← UdpAudioServer ← AES加密 ← MqttUdpAudioChannel ← ChatSession ← Opus编码 ← TTS ← LLM
+
+设备 → MQTT(JSON控制) → MqttDialogueHandler → SessionManager → DialogueService
+设备 ← MQTT(JSON控制) ← MqttDialogueHandler ←
+```
+
+## 7. 新增/修改文件清单
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `communication/udp/UdpAudioServer.java` | UDP 音频服务端，NIO 非阻塞 |
+| `communication/udp/UdpAudioPacket.java` | UDP 数据包结构定义 |
+| `communication/udp/UdpSessionContext.java` | UDP session 状态（密钥、序列号、地址） |
+| `communication/udp/UdpProperties.java` | UDP 配置属性类 |
+| `communication/udp/AesCtrCodec.java` | AES-128-CTR 加解密工具 |
+| `communication/channel/AudioChannel.java` | 音频通道抽象接口 |
+| `communication/channel/WebSocketAudioChannel.java` | WebSocket 通道实现 |
+| `communication/channel/MqttUdpAudioChannel.java` | MQTT+UDP 通道实现 |
+| `communication/mqtt/MqttDialogueHandler.java` | MQTT 对话控制消息处理器 |
+
+### 修改文件
+
+| 文件 | 变更 |
+|------|------|
+| `docker-compose.yml` | 新增 EMQX 服务，暴露 UDP 端口 |
+| `application.yml` | 新增 UDP 配置，MQTT enabled 默认值 |
+| `application-dev.yml` | MQTT/UDP 开发环境配置 |
+| `communication/common/ChatSession.java` | 持有 AudioChannel 接口而非 WebSocket session |
+| `communication/common/SessionManager.java` | 支持 MQTT+UDP session 创建和管理 |
+| `communication/websocket/XiaozhiWebSocketHandler.java` | 适配 AudioChannel 接口 |
+| `pom.xml` | 无需新增依赖（AES/NIO 均为 JDK 内置） |
+
+## 8. 推进顺序
+
+1. **第一部分**：EMQX + 设备管理层启用（基础设施，现有代码对接）
+2. **第二部分 Step 1**：AudioChannel 接口抽取 + WebSocket 适配（重构，不影响现有功能）
+3. **第二部分 Step 2**：UDP 音频服务 + AES 加解密（核心新组件）
+4. **第二部分 Step 3**：MQTT 对话处理器 + Session 管理扩展（对接对话引擎）
+5. **第二部分 Step 4**：OTA 配置下发 + ESP32 设备联调
+6. **集成测试**：端到端验证 MQTT+UDP 语音对话
+
+## 9. 风险与注意事项
+
+1. **NAT 穿透**：UDP 在 NAT 环境下可能受阻，云部署时服务器需有公网 IP 且 UDP 端口可达
+2. **防火墙**：部分网络环境会封锁非常规 UDP 端口，需确认目标网络策略
+3. **ChatSession 重构风险**：抽取 AudioChannel 接口时需谨慎，确保 WebSocket 方案不受影响，建议先写测试
+4. **序列号和时序**：UDP 无序到达，需处理乱序和丢包情况
+5. **EMQX 资源占用**：开发环境内存建议至少预留 512MB 给 EMQX
