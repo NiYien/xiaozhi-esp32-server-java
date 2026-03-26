@@ -112,6 +112,33 @@ Server 服务的 MQTT broker URL 应使用 Docker 内部网络名：
 - `XIAOZHI_MQTT_BROKER_URL=tcp://emqx:1883`（替换现有的 `tcp://host.docker.internal:1883`）
 - Server 服务需添加 `depends_on` 并使用 `condition: service_healthy`（与 MySQL 的 depends_on 模式一致）
 
+### 4.2 EMQX Auto Subscribe 配置
+
+ESP32 固件不主动调用 `Subscribe()`，依赖 Broker 端自动订阅（与官方 mqtt.xiaozhi.me 行为一致）。
+
+通过 EMQX Dashboard（`http://localhost:18083`）或 API 配置 Auto Subscribe 规则：
+
+**Dashboard 路径**：Management → MQTT Settings → Auto Subscribe
+
+**规则**：客户端连接后，根据 `client_id`（格式 `xiaozhi_{deviceId}`）自动订阅对应的 command topic：
+
+```
+Topic:   xiaozhi/+/device/${clientid_suffix}/command
+QoS:     1
+```
+
+其中 `${clientid_suffix}` 需要从 `client_id` 中提取 deviceId 部分。如果 EMQX Auto Subscribe 不支持 clientid 截取，替代方案：
+
+**方案 A（推荐）**：调整 `MqttConfigGenerator` 中的 `client_id` 直接使用 `deviceId`（而非 `xiaozhi_{deviceId}`），Auto Subscribe 规则设为：
+```
+Topic:   xiaozhi/+/device/${clientid}/command
+QoS:     1
+```
+
+**方案 B**：使用 EMQX Rule Engine，在 `client.connected` 事件中执行订阅动作，可以做更灵活的 topic 映射。
+
+> 注意：此配置确保 ESP32 固件零修改即可接收服务端下发的 hello 响应、对话控制消息、唤醒/通知/OTA 等命令。
+
 ### 4.2 服务端配置
 
 `application.yml` 中 MQTT 已有完整配置，核心变更：
