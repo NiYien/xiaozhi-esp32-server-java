@@ -25,48 +25,59 @@
 ## 3. 整体架构
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Spring Boot 服务                        │
-│                                                           │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────┐   │
-│  │ WebSocket     │  │ MQTT 对话    │  │ MQTT 设备管理  │   │
-│  │ Handler       │  │ 处理器       │  │ (现有代码)     │   │
-│  └──────┬───────┘  └──────┬───────┘  └───────┬───────┘   │
-│         │                 │                   │           │
-│         ▼                 ▼                   │           │
-│  ┌──────────────────────────────┐             │           │
-│  │  ChatSession (abstract)      │             │           │
-│  │  ┌──────────────┐ ┌────────┐│             │           │
-│  │  │WebSocket     │ │MqttUdp ││             │           │
-│  │  │Session       │ │Session ││             │           │
-│  │  └──────────────┘ └────────┘│             │           │
-│  └──────────────┬───────────────┘             │           │
-│                 ▼                              │           │
-│  ┌──────────────────────────────┐             │           │
-│  │  DialogueService + Handler   │             │           │
-│  │  (STT → LLM → TTS 管线)     │             │           │
-│  └──────────────────────────────┘             │           │
-│                                               │           │
-│  ┌──────────────┐                             │           │
-│  │ UDP 音频服务  │ (Java NIO, 内嵌)            │           │
-│  └──────────────┘                             │           │
-└───────────┼──────────────┼────────────────────┼───────────┘
-            │              │                    │
-       UDP 音频包      MQTT 控制消息        MQTT 管理消息
-       (AES-CTR加密)                            │
-            │              │                    │
-            ▼              ▼                    ▼
-┌──────────────────────────────────────────────────────────┐
-│                     EMQX Broker                           │
-│              (Docker, 端口 1883/8883/18083)                │
-└──────────────────────────────────────────────────────────┘
-            │              │                    │
-            ▼              ▼                    ▼
-┌──────────────────────────────────────────────────────────┐
-│                    ESP32 设备                              │
-│         mqtt_protocol.cc (MQTT控制 + UDP音频)              │
-└──────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│                      Spring Boot 服务                          │
+│                                                               │
+│  ┌─────────────┐  ┌─────────────┐  ┌──────────────┐          │
+│  │ WebSocket    │  │ MQTT 对话   │  │ MQTT 设备管理 │          │
+│  │ Handler      │  │ 处理器      │  │ (现有代码)    │          │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬───────┘          │
+│         │                │                │                   │
+│         ▼                ▼                │                   │
+│  ┌─────────────────────────────┐          │                   │
+│  │  ChatSession (abstract)     │          │                   │
+│  │  ┌─────────────┐ ┌────────┐│          │                   │
+│  │  │WebSocket    │ │MqttUdp ││          │                   │
+│  │  │Session      │ │Session ││          │                   │
+│  │  └─────────────┘ └───┬────┘│          │                   │
+│  └──────────┬────────────┼─────┘          │                   │
+│             ▼            │                │                   │
+│  ┌─────────────────────────────┐          │                   │
+│  │  DialogueService + Handler  │          │                   │
+│  │  (STT → LLM → TTS 管线)    │          │                   │
+│  └─────────────────────────────┘          │                   │
+│                          │                │                   │
+│                ┌─────────┘                │                   │
+│                ▼                          │                   │
+│  ┌──────────────────┐                    │                   │
+│  │ UdpAudioServer   │                    │                   │
+│  │ (NIO, 端口 8888)  │                    │                   │
+│  └────────┬─────────┘                    │                   │
+└───────────┼──────────────────────────────┼───────────────────┘
+            │                              │
+            │           ┌──────────────────────────────────┐
+            │           │          EMQX Broker              │
+            │           │  (Docker, 端口 1883/8883/18083)   │
+            │           └──────────┬───────────┬───────────┘
+            │                      │           │
+            │  UDP 音频包           │ MQTT      │ MQTT
+            │  (AES-CTR加密)       │ 控制消息   │ 管理消息
+            │  直连，不经过 Broker   │           │
+            │                      │           │
+            ▼                      ▼           ▼
+┌───────────────────────────────────────────────────────────────┐
+│                        ESP32 设备                              │
+│               mqtt_protocol.cc (MQTT控制 + UDP音频)            │
+│                                                               │
+│   ┌─ UDP 音频 ──→ 直连 Spring Boot:8888                       │
+│   └─ MQTT 控制 ──→ EMQX Broker ──→ Spring Boot               │
+└───────────────────────────────────────────────────────────────┘
 ```
+
+**关键区分**：
+- **UDP 音频包**：ESP32 ←→ Spring Boot UdpAudioServer，**直连**，不经过 EMQX
+- **MQTT 控制消息**（hello/listen/abort/goodbye）：ESP32 ←→ EMQX ←→ Spring Boot
+- **MQTT 管理消息**（heartbeat/online/offline/sensor）：ESP32 ←→ EMQX ←→ Spring Boot
 
 ## 4. 第一部分：基础设施 + 设备管理层
 
@@ -190,28 +201,60 @@ public class MqttUdpSession extends ChatSession {
 偏移  字段          大小     说明
 0     type          1B      0x01 = 音频数据
 1     flags         1B      保留
-2     payload_len   2B      网络字节序，Opus 数据长度
+2     payload_len   2B      网络字节序（big-endian），Opus 数据长度
 4     ssrc          4B      同步源ID，标识 session
 8     timestamp     4B      网络字节序，毫秒时间戳
-12    sequence      4B      网络字节序，单调递增
+12    sequence      4B      网络字节序，单调递增（从 1 开始）
 16    payload       变长     AES-CTR 加密的 Opus 数据
 ```
 
+**关键设计：16 字节包头 = AES-CTR 的 nonce/IV（双重用途）**
+
+ESP32 固件中，数据包的前 16 字节既是包头元数据，也直接用作 AES-CTR 加解密的 IV。具体机制：
+
+- **发送端**（ESP32 `SendAudio()`，mqtt_protocol.cc 第 166-189 行）：
+  1. 复制 hello 响应中获得的初始 nonce（16 字节）
+  2. 在 nonce 的特定偏移写入本包的 payload_len（字节 2-3）、timestamp（字节 8-11）、sequence（字节 12-15）
+  3. 用修改后的 16 字节 nonce 作为 AES-CTR IV 加密 opus payload
+  4. 发出的数据包 = 这 16 字节 nonce + 加密后的 payload
+
+- **接收端**（ESP32 UDP OnMessage，mqtt_protocol.cc 第 243-287 行）：
+  1. 取收到数据包的前 16 字节，直接作为 AES-CTR IV 解密
+  2. 从字节 8-11 解析 timestamp，从字节 12-15 解析 sequence
+  3. payload 从偏移 16 开始
+
+- **每包独立加密**：每次调用 `mbedtls_aes_crypt_ctr()` 时 `nc_off=0`，不延续上一次的 counter 状态
+- **上下行共用同一个 AES key**（同一个 `aes_ctx_`），通过不同的 nonce 内容区分每个包
+
 **UdpSessionContext**：
-- 存储每个 UDP session 的状态：设备地址、AES 密钥/nonce、本地/远程序列号、SSRC
+- 存储每个 UDP session 的状态：设备地址、AES 密钥、初始 nonce 模板、本地/远程序列号、SSRC
 
 ### 5.3 AES-CTR 加解密
 
 新工具类 `AesCtrCodec`：
 - 使用 JDK 内置 `javax.crypto.Cipher`（AES/CTR/NoPadding）
-- 加密和解密 UDP 音频 payload
-- 密钥和 nonce 在 hello 握手时随机生成，通过 MQTT 下发给设备
+- 每个数据包独立加解密（每次 new Cipher 或 reinit，不复用 counter 状态）
+- 密钥和初始 nonce 在 hello 握手时随机生成，通过 MQTT 下发给设备
 
-**IV 构造方式**：
+**加解密流程**：
+```
+加密（服务端发送）：
+  1. 复制初始 nonce 模板（16 字节）
+  2. 在 nonce 中写入：payload_len(字节2-3), ssrc(字节4-7), timestamp(字节8-11), sequence(字节12-15)
+  3. Cipher.init(ENCRYPT, key, new IvParameterSpec(nonce))
+  4. encrypted = Cipher.doFinal(opusData)
+  5. 发送：nonce(16字节) + encrypted
+
+解密（服务端接收）：
+  1. 取数据包前 16 字节作为 nonce
+  2. Cipher.init(DECRYPT, key, new IvParameterSpec(nonce))
+  3. decrypted = Cipher.doFinal(payload)
+```
+
+**参数说明**：
 - 密钥：16 字节随机生成（AES-128），hello 响应中以 32 字符 hex 下发
-- Nonce：16 字节随机生成，作为 AES-CTR 的初始 IV，hello 响应中以 32 字符 hex 下发
-- CTR 模式下 Cipher 内部自动递增 counter，每次加/解密操作延续上一次的 counter 状态
-- 上行和下行各自维护独立的 Cipher 实例（相同 key/nonce，但 counter 独立递进）
+- 初始 Nonce：16 字节随机生成，hello 响应中以 32 字符 hex 下发，作为 nonce 模板
+- 每包的 nonce 不同（因为 sequence/timestamp 不同），保证 CTR 模式安全性
 - 与 ESP32 固件 `mqtt_protocol.cc` 中 `mbedtls_aes_crypt_ctr()` 的行为一致
 
 ### 5.4 MQTT 对话处理器
@@ -417,19 +460,48 @@ server:
 以下结构与 ESP32 固件 `mqtt_protocol.cc` 中 `SendAudio()` 和 UDP 接收逻辑对齐：
 
 ```c
-// ESP32 端发送的 UDP 数据包结构（mqtt_protocol.cc）
-struct UdpAudioHeader {
-    uint8_t  type;          // 0x01 = audio
-    uint8_t  flags;         // 保留，当前为 0
-    uint16_t payload_len;   // 网络字节序 (big-endian)
-    uint32_t ssrc;          // 同步源ID
-    uint32_t timestamp;     // 网络字节序，毫秒
-    uint32_t sequence;      // 网络字节序，单调递增
+// ESP32 端 UDP 数据包结构（mqtt_protocol.cc 第 245-248 行注释）
+// |type 1u|flags 1u|payload_len 2u|ssrc 4u|timestamp 4u|sequence 4u|payload payload_len|
+//
+// 前 16 字节（header）同时用作 AES-CTR 的 nonce/IV
+struct UdpAudioHeader {  // 16 字节 = AES-CTR nonce
+    uint8_t  type;          // 偏移 0:  0x01 = audio
+    uint8_t  flags;         // 偏移 1:  保留，当前为 0
+    uint16_t payload_len;   // 偏移 2:  网络字节序 (big-endian)
+    uint32_t ssrc;          // 偏移 4:  同步源ID
+    uint32_t timestamp;     // 偏移 8:  网络字节序，毫秒
+    uint32_t sequence;      // 偏移 12: 网络字节序，从 1 开始单调递增
 };
 // 紧跟 header 之后是 AES-CTR 加密的 Opus 数据
+// 加密时 IV = 这 16 字节 header，每包独立加密（nc_off=0）
 ```
 
-服务端 `UdpAudioPacket.java` 必须与此结构完全一致。
+**ESP32 发送端关键代码**（mqtt_protocol.cc 第 172-184 行）：
+```cpp
+// 1. 复制初始 nonce 作为模板
+std::string nonce = aes_nonce_;
+// 2. 在 nonce 特定偏移写入本包元数据
+*(uint16_t*)&nonce[2] = htons(packet->payload.size());
+*(uint32_t*)&nonce[8] = htonl(packet->timestamp);
+*(uint32_t*)&nonce[12] = htonl(++local_sequence_);
+// 3. 用修改后的 nonce 作为 IV 加密
+size_t nc_off = 0;
+mbedtls_aes_crypt_ctr(&aes_ctx_, ..., &nc_off, (uint8_t*)nonce.c_str(), ...);
+// 4. 发出的包 = nonce(16B) + encrypted_opus
+```
+
+**ESP32 接收端关键代码**（mqtt_protocol.cc 第 253-277 行）：
+```cpp
+// 1. 检查包类型
+if (data[0] != 0x01) return;
+// 2. 取前 16 字节直接作为 AES-CTR IV
+uint8_t* nonce = (uint8_t*)data.data();
+size_t nc_off = 0;
+// 3. payload 从偏移 16 开始
+mbedtls_aes_crypt_ctr(&aes_ctx_, decrypted_size, &nc_off, nonce, ...);
+```
+
+服务端 `UdpAudioPacket.java` 和 `AesCtrCodec.java` 必须与此行为完全一致。
 
 ## 11. 安全演进路线
 
