@@ -14,6 +14,7 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -134,11 +135,19 @@ public class KnowledgeRetrievalService {
                     if (embeddingModel != null) {
                         logger.info("检索使用知识库关联的 Embedding 模型: knowledgeBaseId={}, embeddingConfigId={}",
                                 kbId, knowledgeBase.getEmbeddingConfigId());
-                        return RedisVectorStore.builder(ragJedisPooled, embeddingModel)
+                        RedisVectorStore store = RedisVectorStore.builder(ragJedisPooled, embeddingModel)
                                 .indexName(ragConfig.getIndexName())
                                 .prefix(ragConfig.getPrefix())
+                                .metadataFields(
+                                        MetadataField.tag("knowledgeBaseId"),
+                                        MetadataField.tag("documentId"),
+                                        MetadataField.tag("userId"),
+                                        MetadataField.tag("docName"),
+                                        MetadataField.tag("chunkIndex"))
                                 .initializeSchema(true)
                                 .build();
+                        store.afterPropertiesSet();
+                        return store;
                     }
                 }
             } catch (Exception e) {
@@ -152,11 +161,19 @@ public class KnowledgeRetrievalService {
         try {
             EmbeddingModel defaultModel = embeddingModelFactory.defaultEmbeddingModel();
             if (defaultModel != null && ragJedisPooled != null) {
-                return RedisVectorStore.builder(ragJedisPooled, defaultModel)
+                RedisVectorStore store = RedisVectorStore.builder(ragJedisPooled, defaultModel)
                         .indexName(ragConfig.getIndexName())
                         .prefix(ragConfig.getPrefix())
+                        .metadataFields(
+                                MetadataField.tag("knowledgeBaseId"),
+                                MetadataField.tag("documentId"),
+                                MetadataField.tag("userId"),
+                                MetadataField.tag("docName"),
+                                MetadataField.tag("chunkIndex"))
                         .initializeSchema(true)
                         .build();
+                store.afterPropertiesSet();
+                return store;
             }
         } catch (Exception e) {
             logger.error("创建默认 VectorStore 失败: {}", e.getMessage());

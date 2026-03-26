@@ -23,14 +23,14 @@ export function wakeupDevice(deviceId: string, message?: string) {
   if (message) {
     params.message = message
   }
-  return http.post(`/api/mqtt/wakeup/${deviceId}`, params)
+  return http.post(`/mqtt/wakeup/${deviceId}`, params)
 }
 
 /**
  * 向指定设备发送通知
  */
 export function notifyDevice(deviceId: string, text: string) {
-  return http.post(`/api/mqtt/notify/${deviceId}`, { text })
+  return http.post(`/mqtt/notify/${deviceId}`, { text })
 }
 
 /**
@@ -46,7 +46,7 @@ export function broadcast(text: string) {
  * 向指定设备推送 OTA 通知
  */
 export function pushOta(deviceId: string, version: string, url: string, releaseNotes?: string, force?: boolean) {
-  return http.post(`/api/mqtt/ota/${deviceId}`, {
+  return http.post(`/mqtt/ota/${deviceId}`, {
     version,
     url,
     releaseNotes: releaseNotes || '',
@@ -72,7 +72,7 @@ export function broadcastOta(version: string, url: string, releaseNotes?: string
  * 查询设备最新传感器数据
  */
 export function getSensorLatest(deviceId: string) {
-  return http.get<SensorData>(`/api/mqtt/sensor/${deviceId}/latest`)
+  return http.get<SensorData>(`/mqtt/sensor/${deviceId}/latest`)
 }
 
 /**
@@ -82,7 +82,7 @@ export function getSensorHistory(deviceId: string, startTime?: string, endTime?:
   const params: Record<string, string> = {}
   if (startTime) params.startTime = startTime
   if (endTime) params.endTime = endTime
-  return http.get<SensorData[]>(`/api/mqtt/sensor/${deviceId}`, params)
+  return http.get<SensorData[]>(`/mqtt/sensor/${deviceId}`, params)
 }
 
 // ========== 设备分组 ==========
@@ -105,28 +105,28 @@ export function createDeviceGroup(groupName: string, description?: string) {
  * 更新分组
  */
 export function updateDeviceGroup(groupId: number, data: { groupName?: string; description?: string }) {
-  return http.putJSON(`/api/deviceGroup/${groupId}`, data)
+  return http.putJSON(`/deviceGroup/${groupId}`, data)
 }
 
 /**
  * 删除分组
  */
 export function deleteDeviceGroup(groupId: number) {
-  return http.delete(`/api/deviceGroup/${groupId}`)
+  return http.delete(`/deviceGroup/${groupId}`)
 }
 
 /**
  * 获取分组内设备ID列表
  */
 export function getGroupDevices(groupId: number) {
-  return http.get<string[]>(`/api/deviceGroup/${groupId}/devices`)
+  return http.get<string[]>(`/deviceGroup/${groupId}/devices`)
 }
 
 /**
  * 批量添加设备到分组
  */
 export function addGroupMembers(groupId: number, deviceIds: string[]) {
-  return request.post(`/api/deviceGroup/${groupId}/members`, deviceIds, {
+  return request.post(`/deviceGroup/${groupId}/members`, deviceIds, {
     headers: { 'Content-Type': 'application/json;charset=UTF-8' },
   })
 }
@@ -135,7 +135,7 @@ export function addGroupMembers(groupId: number, deviceIds: string[]) {
  * 从分组中移除设备
  */
 export function removeGroupMember(groupId: number, deviceId: string) {
-  return http.delete(`/api/deviceGroup/${groupId}/member/${deviceId}`)
+  return http.delete(`/deviceGroup/${groupId}/member/${deviceId}`)
 }
 
 /**
@@ -144,14 +144,14 @@ export function removeGroupMember(groupId: number, deviceId: string) {
 export function wakeupGroup(groupId: number, message?: string) {
   const params: Record<string, unknown> = {}
   if (message) params.message = message
-  return http.post(`/api/mqtt/group/${groupId}/wakeup`, params)
+  return http.post(`/mqtt/group/${groupId}/wakeup`, params)
 }
 
 /**
  * 分组通知
  */
 export function notifyGroup(groupId: number, text: string) {
-  return http.post(`/api/mqtt/group/${groupId}/notify`, { text })
+  return http.post(`/mqtt/group/${groupId}/notify`, { text })
 }
 
 // ========== 远程配置下发 ==========
@@ -160,12 +160,12 @@ export function notifyGroup(groupId: number, text: string) {
  * 向设备推送配置
  */
 export function pushDeviceConfig(deviceId: string, config: DeviceConfig) {
-  return http.post(`/api/mqtt/config/${deviceId}`, config)
+  return http.postJSON(`/mqtt/config/${deviceId}`, config)
 }
 
 /**
  * 向分组推送配置
  */
 export function pushGroupConfig(groupId: number, config: DeviceConfig) {
-  return http.post(`/api/mqtt/config/group/${groupId}`, config)
+  return http.postJSON(`/mqtt/config/group/${groupId}`, config)
 }

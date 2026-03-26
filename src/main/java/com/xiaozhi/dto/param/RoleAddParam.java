@@ -81,4 +81,13 @@ public class RoleAddParam {
 
     @Schema(description = "记忆类型", example = "long")
     private String memoryType;
+
+    @Schema(description = "关联知识库ID列表，逗号分隔", example = "1,2,3")
+    private String knowledgeBaseIds;
+
+    @Schema(description = "RAG检索返回条数", example = "5")
+    private Integer ragTopK;
+
+    @Schema(description = "RAG相似度阈值", example = "0.7")
+    private Double ragThreshold;
 }

@@ -110,7 +110,8 @@ public class PahoMqttService implements MqttService, MqttCallback {
         try {
             MqttSubscription subscription = new MqttSubscription(topicFilter, qos);
             mqttClient.subscribe(new MqttSubscription[]{subscription}, null, null,
-                    new IMqttMessageListener[]{(t, m) -> {}}, new org.eclipse.paho.mqttv5.common.packet.MqttProperties());
+                    new IMqttMessageListener[]{(t, m) -> messageArrived(t, m)},
+                    new org.eclipse.paho.mqttv5.common.packet.MqttProperties());
             listenerMap.put(topicFilter, listener);
             logger.info("MQTT 已订阅 - TopicFilter: {}, QoS: {}", topicFilter, qos);
         } catch (MqttException e) {
@@ -228,7 +229,8 @@ public class PahoMqttService implements MqttService, MqttCallback {
             try {
                 MqttSubscription subscription = new MqttSubscription(entry.getKey(), mqttProperties.getQos());
                 mqttClient.subscribe(new MqttSubscription[]{subscription}, null, null,
-                        new IMqttMessageListener[]{(t, m) -> {}}, new org.eclipse.paho.mqttv5.common.packet.MqttProperties());
+                        new IMqttMessageListener[]{(t, m) -> messageArrived(t, m)},
+                        new org.eclipse.paho.mqttv5.common.packet.MqttProperties());
                 logger.info("MQTT 重连后重新订阅 - TopicFilter: {}", entry.getKey());
             } catch (MqttException e) {
                 logger.error("MQTT 重连后重新订阅失败 - TopicFilter: {}", entry.getKey(), e);

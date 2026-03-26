@@ -1,6 +1,5 @@
 package com.xiaozhi.communication.common;
 
-import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.dialogue.llm.memory.Conversation;
 import com.xiaozhi.dialogue.llm.tool.ToolsSessionHolder;
 import com.xiaozhi.dialogue.service.DialogueService;
@@ -127,16 +126,11 @@ public class SessionManager {
             return;
         }
         try {
-            if(chatSession instanceof WebSocketSession){
-                sessionRegistry.remove(chatSession.getSessionId());
-                // 先关闭WebSocket连接
-                chatSession.close();
-
-                applicationContext.publishEvent(new ChatSessionCloseEvent(chatSession));
-                logger.info("会话已关闭 - SessionId: {} SessionType: {}", chatSession.getSessionId(), chatSession.getClass().getSimpleName());
-            }
+            sessionRegistry.remove(chatSession.getSessionId());
+            chatSession.close();
+            applicationContext.publishEvent(new ChatSessionCloseEvent(chatSession));
+            logger.info("会话已关闭 - SessionId: {} SessionType: {}", chatSession.getSessionId(), chatSession.getClass().getSimpleName());
             chatSession.clearAudioSinks();
-
         } catch (Exception e) {
             logger.error("清理会话资源时发生错误 - SessionId: {}",
                     chatSession.getSessionId(), e);

@@ -43,8 +43,11 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
     ports:
       - "8091:8091"
+      - "8888:8888/udp"
     networks:
       - app-network
     environment:
@@ -55,17 +58,49 @@ services:
       - XIAOZHI_SERVER_IP=${SERVER_IP:-192.168.2.4}
       - XIAOZHI_RAG_ENABLED=${RAG_ENABLED:-true}
       - XIAOZHI_MQTT_ENABLED=${MQTT_ENABLED:-true}
-      - XIAOZHI_MQTT_BROKER_URL=${MQTT_BROKER_URL:-tcp://host.docker.internal:1883}
+      - XIAOZHI_MQTT_BROKER_URL=${MQTT_BROKER_URL:-tcp://emqx:1883}
+      - SPRING_APPLICATION_JSON={"xiaozhi":{"mqtt":{"device-endpoint":"192.168.2.4:1883","device-username":"device","device-password":"device123"},"udp":{"enabled":true,"port":8888,"external-ip":"192.168.2.4"}}}
     volumes:
       - maven_repo:/root/.m2/repository  # 持久化Maven仓库
+      - knowledge_uploads:/app/uploads/knowledge  # 持久化知识库上传文件
     restart: on-failure  # 添加重启策略，如果启动失败会自动重试
+
+  emqx:
+    image: emqx/emqx:5.8
+    container_name: emqx
+    restart: always
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+      - "18083:18083"
+    environment:
+      - EMQX_NAME=emqx
+      - EMQX_HOST=127.0.0.1
+      # Auto Subscribe 配置：首次启动后需通过 Dashboard(http://localhost:18083) 配置
+      # 路径: Management > Auto Subscribe > Create
+      # Topic: xiaozhi/+/device/${clientid}/command  QoS: 1
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   redis:
     image: redis:latest
     container_name: redis
     restart: always
+    ports:
+      - "6379:6379"
     networks:
       - app-network
+    volumes:
+      - redis_data:/data  # 持久化Redis数据（含向量索引）
 
 networks:
   app-network:
@@ -74,3 +109,7 @@ networks:
 volumes:
   mysql_data:  # 持久化数据卷
   maven_repo:  # 持久化Maven仓库
+  redis_data:  # 持久化Redis数据（含RAG向量索引）
+  knowledge_uploads:  # 持久化知识库上传文件
+  emqx_data:  # 持久化EMQX数据
+  emqx_log:  # 持久化EMQX日志

@@ -205,6 +205,16 @@ xiaozhi:
     # 设备连接 MQTT Broker 的认证信息（通过 OTA 下发给设备）
     # device-username: device
     # device-password: your_device_password
+    # device-endpoint: mqtt.example.com:1883
+
+# ============================================================
+# UDP 音频服务配置（默认关闭）
+# ============================================================
+  udp:
+    enabled: false
+    port: 8888
+    # external-ip: 192.168.1.100
+    buffer-size: 2048
 
 # ============================================================
 # 自定义配置

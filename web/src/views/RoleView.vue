@@ -885,7 +885,7 @@ const loadKnowledgeBases = async () => {
     knowledgeBaseLoading.value = true
     const res = await queryKnowledgeBases({})
     if (res.code === 200 && res.data) {
-      knowledgeBaseList.value = (res.data.list || []) as KnowledgeBase[]
+      knowledgeBaseList.value = ((res as any).data || []) as KnowledgeBase[]
     }
   } catch (error) {
     console.error('加载知识库列表失败:', error)

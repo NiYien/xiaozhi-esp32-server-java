@@ -185,7 +185,12 @@ public class OtaServiceImpl implements OtaService {
                         String.valueOf(boundDevice.getUserId()), deviceId);
                 if (mqttConfig != null) {
                     response.setMqtt(mqttConfig);
+                    logger.info("OTA 返回 MQTT 配置 - DeviceId: {}, endpoint: {}", deviceId, mqttConfig.get("endpoint"));
+                } else {
+                    logger.warn("OTA MQTT 配置为 null - DeviceId: {} (device-username/password 可能未配置)", deviceId);
                 }
+            } else {
+                logger.info("OTA 跳过 MQTT 配置 - mqttConfigGenerator 未注入（MQTT 未启用）");
             }
         }
 

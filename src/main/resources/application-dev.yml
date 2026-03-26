@@ -6,7 +6,7 @@ spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/xiaozhi?useUnicode=true&characterEncoding=utf8&serverTimezone=GMT%2B8&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    url: jdbc:mysql://localhost:13306/xiaozhi?useUnicode=true&characterEncoding=utf8&serverTimezone=GMT%2B8&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
     username: xiaozhi
     password: 123456
 
@@ -29,15 +29,21 @@ dashscope:
 
 # ============================================================
 # MQTT 配置（开发环境）
-# 需要先启动 MQTT Broker（如 Mosquitto）：
-#   docker run -d -p 1883:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf
+# Docker 环境：docker-compose up 自动启动 EMQX，broker-url 由环境变量覆盖为 tcp://emqx:1883
+# 本地开发：直接连接本机 EMQX（需先启动 docker-compose 中的 emqx 服务）
 # ============================================================
 xiaozhi:
   mqtt:
     enabled: true
     broker-url: tcp://localhost:1883
-    # device-username: device
-    # device-password: device123
+    device-username: device
+    device-password: device123
+    device-endpoint: 192.168.2.4:1883
+
+  udp:
+    enabled: true
+    port: 8888
+    external-ip: 192.168.2.4
 
   # RAG 知识库（需要配置 Embedding 模型和 Redis）
   rag:

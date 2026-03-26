@@ -15,6 +15,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.redis.RedisVectorStore;
+import org.springframework.ai.vectorstore.redis.RedisVectorStore.MetadataField;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
@@ -208,11 +209,19 @@ public class DocumentProcessingService {
                     if (embeddingModel != null) {
                         logger.info("使用知识库关联的 Embedding 模型: knowledgeBaseId={}, embeddingConfigId={}",
                                 knowledgeBaseId, knowledgeBase.getEmbeddingConfigId());
-                        return RedisVectorStore.builder(ragJedisPooled, embeddingModel)
+                        RedisVectorStore store = RedisVectorStore.builder(ragJedisPooled, embeddingModel)
                                 .indexName(ragConfig.getIndexName())
                                 .prefix(ragConfig.getPrefix())
+                                .metadataFields(
+                                        MetadataField.tag("knowledgeBaseId"),
+                                        MetadataField.tag("documentId"),
+                                        MetadataField.tag("userId"),
+                                        MetadataField.tag("docName"),
+                                        MetadataField.tag("chunkIndex"))
                                 .initializeSchema(true)
                                 .build();
+                        store.afterPropertiesSet();
+                        return store;
                     }
                 } catch (Exception e) {
                     logger.warn("获取知识库关联的 Embedding 模型失败，回退到全局默认: knowledgeBaseId={}, error={}",
@@ -234,6 +243,12 @@ public class DocumentProcessingService {
                 RedisVectorStore store = RedisVectorStore.builder(ragJedisPooled, defaultModel)
                         .indexName(ragConfig.getIndexName())
                         .prefix(ragConfig.getPrefix())
+                        .metadataFields(
+                                MetadataField.tag("knowledgeBaseId"),
+                                MetadataField.tag("documentId"),
+                                MetadataField.tag("userId"),
+                                MetadataField.tag("docName"),
+                                MetadataField.tag("chunkIndex"))
                         .initializeSchema(true)
                         .build();
                 store.afterPropertiesSet();

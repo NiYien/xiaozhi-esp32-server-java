@@ -43,18 +43,24 @@ public class MqttConfigGenerator {
 
         Map<String, Object> mqttConfig = new LinkedHashMap<>();
 
-        // 从 brokerUrl 提取 endpoint（去掉 tcp:// 前缀）
-        String brokerUrl = mqttProperties.getBrokerUrl();
-        String endpoint = brokerUrl;
-        if (brokerUrl.startsWith("tcp://")) {
-            endpoint = brokerUrl.substring(6);
-        } else if (brokerUrl.startsWith("ssl://")) {
-            endpoint = brokerUrl.substring(6);
+        // endpoint 取值：优先 deviceEndpoint，未配置回退 brokerUrl 去协议前缀
+        String endpoint;
+        String deviceEndpoint = mqttProperties.getDeviceEndpoint();
+        if (deviceEndpoint != null && !deviceEndpoint.isEmpty()) {
+            endpoint = deviceEndpoint;
+        } else {
+            String brokerUrl = mqttProperties.getBrokerUrl();
+            endpoint = brokerUrl;
+            if (brokerUrl.startsWith("tcp://")) {
+                endpoint = brokerUrl.substring(6);
+            } else if (brokerUrl.startsWith("ssl://")) {
+                endpoint = brokerUrl.substring(6);
+            }
         }
         mqttConfig.put("endpoint", endpoint);
 
         // 客户端ID，基于设备ID生成
-        mqttConfig.put("client_id", "xiaozhi_" + deviceId);
+        mqttConfig.put("client_id", deviceId);
 
         // 设备认证信息
         mqttConfig.put("username", mqttProperties.getDeviceUsername());

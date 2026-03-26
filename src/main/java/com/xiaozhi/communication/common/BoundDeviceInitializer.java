@@ -1,6 +1,5 @@
 package com.xiaozhi.communication.common;
 
-import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.dialogue.aec.AecService;
 import com.xiaozhi.dialogue.llm.ChatService;
 import com.xiaozhi.dialogue.llm.tool.ToolsGlobalRegistry;
@@ -59,7 +58,7 @@ public class BoundDeviceInitializer {
             // 更新设备状态
             deviceService.update(new SysDevice()
                     .setDeviceId(deviceId)
-                    .setState(chatSession instanceof WebSocketSession ? SysDevice.DEVICE_STATE_ONLINE : SysDevice.DEVICE_STATE_STANDBY));
+                    .setState(SysDevice.DEVICE_STATE_ONLINE));
         } catch (Exception e) {
             logger.error("设备初始化失败 - DeviceId: " + deviceId, e);
             try {

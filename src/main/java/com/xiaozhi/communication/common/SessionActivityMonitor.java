@@ -1,6 +1,5 @@
 package com.xiaozhi.communication.common;
 
-import com.xiaozhi.communication.server.websocket.WebSocketSession;
 import com.xiaozhi.entity.SysDevice;
 import com.xiaozhi.service.SysDeviceService;
 import org.slf4j.Logger;
@@ -97,36 +96,28 @@ public class SessionActivityMonitor {
         Thread.startVirtualThread(() -> {
             Instant now = Instant.now();
             sessionRegistry.getAllSessions().forEach(session -> {
-                if (session instanceof WebSocketSession) {
-                    Instant lastActivity = session.getLastActivityTime();
-                    if (lastActivity != null) {
-                        Duration inactiveDuration = Duration.between(lastActivity, now);
-                        if (inactiveDuration.getSeconds() > inactiveTimeOutSeconds) {
-                            logger.info("会话 {} 已经 {} 秒没有有效活动，发送超时提示并自动关闭",
-                                    session.getSessionId(), inactiveDuration.getSeconds());
-                            // 长时间不活跃，可以直接清理ASR还没有被识别的音频数据
-                            session.clearAudioSinks();
-                            if (session.getPersona() != null) {
-                                // 不涉及ASR了
-                                session.getPersona().sendGoodbyeMessage();
-                            }
-                            // 超时清理时更新数据库设备状态为离线
-                            SysDevice device = session.getSysDevice();
-                            if (device != null && deviceService != null) {
-                                try {
-                                    deviceService.update(new SysDevice()
-                                            .setDeviceId(device.getDeviceId())
-                                            .setState(SysDevice.DEVICE_STATE_OFFLINE));
-                                    logger.info("超时清理 - 设备 {} 状态已更新为离线", device.getDeviceId());
-                                } catch (Exception e) {
-                                    logger.error("超时清理 - 更新设备 {} 状态失败", device.getDeviceId(), e);
-                                }
-                            }
-                            if (session instanceof WebSocketSession) {
-                                // 解绑WebSocket会话，回收Session对象。
-                                removeSessionCallback.accept(session.getSessionId());
+                Instant lastActivity = session.getLastActivityTime();
+                if (lastActivity != null) {
+                    Duration inactiveDuration = Duration.between(lastActivity, now);
+                    if (inactiveDuration.getSeconds() > inactiveTimeOutSeconds) {
+                        logger.info("会话 {} 已经 {} 秒没有有效活动，发送超时提示并自动关闭",
+                                session.getSessionId(), inactiveDuration.getSeconds());
+                        session.clearAudioSinks();
+                        if (session.getPersona() != null) {
+                            session.getPersona().sendGoodbyeMessage();
+                        }
+                        SysDevice device = session.getSysDevice();
+                        if (device != null && deviceService != null) {
+                            try {
+                                deviceService.update(new SysDevice()
+                                        .setDeviceId(device.getDeviceId())
+                                        .setState(SysDevice.DEVICE_STATE_OFFLINE));
+                                logger.info("超时清理 - 设备 {} 状态已更新为离线", device.getDeviceId());
+                            } catch (Exception e) {
+                                logger.error("超时清理 - 更新设备 {} 状态失败", device.getDeviceId(), e);
                             }
                         }
+                        removeSessionCallback.accept(session.getSessionId());
                     }
                 }
             });

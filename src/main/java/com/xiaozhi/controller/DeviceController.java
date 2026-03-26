@@ -301,6 +301,9 @@ public class DeviceController extends BaseController {
             if (otaResponse.getWebsocket() != null) {
                 responseData.put("websocket", otaResponse.getWebsocket());
             }
+            if (otaResponse.getMqtt() != null) {
+                responseData.put("mqtt", otaResponse.getMqtt());
+            }
 
             // 手动将响应数据转换为字节数组，以便设置确切的Content-Length
             byte[] responseBytes = JsonUtil.OBJECT_MAPPER.writeValueAsBytes(responseData);

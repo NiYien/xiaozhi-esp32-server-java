@@ -80,4 +80,10 @@ public class MqttProperties {
      * 设备连接 MQTT Broker 的密码（通过 OTA 下发给设备）
      */
     private String devicePassword;
+
+    /**
+     * 设备连接 MQTT Broker 的外部可达地址（通过 OTA 下发给设备）
+     * Docker 内部用 broker-url，设备端用此地址连接 Broker
+     */
+    private String deviceEndpoint;
 }

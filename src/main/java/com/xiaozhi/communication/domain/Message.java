@@ -11,7 +11,8 @@ import javax.validation.constraints.NotNull;
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.EXISTING_PROPERTY,
         property = "type",
-        visible = true)
+        visible = true,
+        defaultImpl = UnknownMessage.class)
 @JsonSubTypes({
         @JsonSubTypes.Type(value = HelloMessage.class, name = "hello"),
         @JsonSubTypes.Type(value = DeviceMcpMessage.class, name = "mcp"),
