@@ -392,7 +392,7 @@ public void closeSession(ChatSession chatSession) {
 
 ### 5.6 OTA 配置下发
 
-现有 `MqttConfigGenerator` 已实现（无需修改），OTA 响应中包含：
+现有 `MqttConfigGenerator` 已实现基础逻辑，需修改 endpoint 取值以支持 `device-endpoint` 配置项（见 4.3 节说明）。OTA 响应中包含：
 ```json
 {
   "mqtt": {
